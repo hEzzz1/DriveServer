@@ -2,6 +2,7 @@
 疲劳驾驶和分心检测系统服务器
 
 ## 文档入口
+- [Auth 模块实现文档](./docs/auth-module.md)
 - [服务器设计总览](./docs/server-design/00-index.md)
 - [需求规格说明书](./docs/server-design/01-requirements.md)
 - [总体架构设计说明书](./docs/server-design/02-architecture.md)

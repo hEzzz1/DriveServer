@@ -8,7 +8,7 @@ spring:
     enabled: false
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: create-drop
   docker:
     compose:
       enabled: false
@@ -18,3 +18,8 @@ management:
     redis:
       enabled: false
 
+auth:
+  jwt:
+    secret: testDriveServerJwtSecretAtLeast32Bytes
+    expire-seconds: 3600
+    issuer: DriveServerTest

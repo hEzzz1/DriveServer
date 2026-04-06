@@ -1,0 +1,34 @@
+package com.example.demo.common.api;
+
+import org.springframework.http.HttpStatus;
+
+public enum ApiCode {
+    SUCCESS(0, "ok", HttpStatus.OK),
+    INVALID_PARAM(40001, "请求参数不合法", HttpStatus.BAD_REQUEST),
+    UNAUTHORIZED(40101, "未授权或token失效", HttpStatus.UNAUTHORIZED),
+    FORBIDDEN(40301, "无权限访问", HttpStatus.FORBIDDEN),
+    NOT_FOUND(40401, "资源不存在", HttpStatus.NOT_FOUND),
+    INTERNAL_ERROR(50001, "内部服务器错误", HttpStatus.INTERNAL_SERVER_ERROR);
+
+    private final int code;
+    private final String message;
+    private final HttpStatus httpStatus;
+
+    ApiCode(int code, String message, HttpStatus httpStatus) {
+        this.code = code;
+        this.message = message;
+        this.httpStatus = httpStatus;
+    }
+
+    public int getCode() {
+        return code;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public HttpStatus getHttpStatus() {
+        return httpStatus;
+    }
+}

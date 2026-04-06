@@ -35,3 +35,9 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+
+auth:
+  jwt:
+    secret: ${JWT_SECRET:DriveServerDevSecretDriveServerDevSecret1234}
+    expire-seconds: ${JWT_EXPIRE_SECONDS:7200}
+    issuer: ${JWT_ISSUER:DriveServer}
