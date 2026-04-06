@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760">
+  <defs>
+    <style>
+      .title { font: 700 28px Arial, sans-serif; fill: #0f172a; }
+      .label { font: 600 18px Arial, sans-serif; fill: #0f172a; }
+      .small { font: 500 14px Arial, sans-serif; fill: #334155; }
+      .box { fill: #f8fafc; stroke: #334155; stroke-width: 2; rx: 12; ry: 12; }
+      .data { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; rx: 12; ry: 12; }
+      .proc { fill: #eef2ff; stroke: #4338ca; stroke-width: 2; rx: 12; ry: 12; }
+      .edge { stroke: #0f172a; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f172a"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="48" class="title">Drive Monitoring Server - Production-Oriented Architecture</text>
+
+  <rect x="40" y="90" width="240" height="90" class="box"/>
+  <text x="70" y="130" class="label">Device Simulator</text>
+  <text x="70" y="156" class="small">HTTP event upload</text>
+
+  <rect x="340" y="90" width="260" height="90" class="box"/>
+  <text x="370" y="130" class="label">Nginx / API Gateway</text>
+  <text x="370" y="156" class="small">rate limit + auth pass-through</text>
+
+  <rect x="660" y="90" width="300" height="90" class="proc"/>
+  <text x="690" y="130" class="label">Spring Boot Ingest API</text>
+  <text x="690" y="156" class="small">validate + idempotency + trace</text>
+
+  <rect x="1020" y="90" width="320" height="90" class="data"/>
+  <text x="1050" y="130" class="label">Redis Streams</text>
+  <text x="1050" y="156" class="small">stream:events</text>
+
+  <rect x="720" y="260" width="260" height="90" class="proc"/>
+  <text x="745" y="300" class="label">Rule Engine Consumer</text>
+  <text x="745" y="326" class="small">score + state machine</text>
+
+  <rect x="1020" y="260" width="320" height="90" class="proc"/>
+  <text x="1048" y="300" class="label">Time-Series Consumer</text>
+  <text x="1048" y="326" class="small">batch write pipeline</text>
+
+  <rect x="460" y="440" width="250" height="90" class="data"/>
+  <text x="505" y="480" class="label">MySQL</text>
+  <text x="488" y="506" class="small">alerts + rules + audit</text>
+
+  <rect x="760" y="440" width="250" height="90" class="data"/>
+  <text x="820" y="480" class="label">Redis Cache</text>
+  <text x="785" y="506" class="small">realtime + cooldown + hot data</text>
+
+  <rect x="1060" y="440" width="250" height="90" class="data"/>
+  <text x="1120" y="480" class="label">InfluxDB 3</text>
+  <text x="1098" y="506" class="small">high-frequency metrics</text>
+
+  <rect x="520" y="610" width="300" height="90" class="box"/>
+  <text x="555" y="650" class="label">Query / Stats API</text>
+  <text x="555" y="676" class="small">REST + WebSocket</text>
+
+  <rect x="900" y="610" width="280" height="90" class="box"/>
+  <text x="950" y="650" class="label">Ops Dashboard</text>
+  <text x="930" y="676" class="small">alerts + trends + live board</text>
+
+  <path d="M280 135 L340 135" class="edge"/>
+  <path d="M600 135 L660 135" class="edge"/>
+  <path d="M960 135 L1020 135" class="edge"/>
+
+  <path d="M1170 180 L1170 260" class="edge"/>
+  <path d="M1090 180 L850 260" class="edge"/>
+
+  <path d="M850 350 L585 440" class="edge"/>
+  <path d="M850 350 L885 440" class="edge"/>
+  <path d="M1170 350 L1185 440" class="edge"/>
+
+  <path d="M585 530 L670 610" class="edge"/>
+  <path d="M885 530 L740 610" class="edge"/>
+  <path d="M1185 530 L770 610" class="edge"/>
+
+  <path d="M820 655 L900 655" class="edge"/>
+</svg>
+

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="720" viewBox="0 0 1300 720">
+  <defs>
+    <style>
+      .title { font: 700 28px Arial, sans-serif; fill: #0f172a; }
+      .layer { fill: #f8fafc; stroke: #334155; stroke-width: 2; rx: 14; ry: 14; }
+      .db { fill: #ecfeff; stroke: #0e7490; stroke-width: 2; rx: 12; ry: 12; }
+      .txt { font: 600 18px Arial, sans-serif; fill: #0f172a; }
+      .small { font: 500 14px Arial, sans-serif; fill: #334155; }
+      .edge { stroke: #0f172a; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f172a"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="50" class="title">Data Layer Responsibilities</text>
+
+  <rect x="60" y="90" width="1180" height="160" class="layer"/>
+  <text x="90" y="130" class="txt">Hot Path (0~15 min)</text>
+  <text x="90" y="158" class="small">Real-time status, cooldown keys, and short-term trend cache.</text>
+  <rect x="90" y="176" width="300" height="56" class="db"/>
+  <text x="180" y="210" class="small">Redis</text>
+  <rect x="430" y="176" width="300" height="56" class="db"/>
+  <text x="480" y="210" class="small">Redis Streams</text>
+  <rect x="770" y="176" width="420" height="56" class="db"/>
+  <text x="830" y="210" class="small">WebSocket Session Cache</text>
+
+  <rect x="60" y="280" width="1180" height="180" class="layer"/>
+  <text x="90" y="320" class="txt">Transactional Layer (days to years)</text>
+  <text x="90" y="348" class="small">Alert lifecycle, user permissions, rule versions, and audit logs.</text>
+  <rect x="90" y="366" width="520" height="72" class="db"/>
+  <text x="300" y="400" class="small">MySQL (OLTP)</text>
+  <rect x="650" y="366" width="540" height="72" class="db"/>
+  <text x="860" y="400" class="small">Backup Storage (daily + binlog)</text>
+
+  <rect x="60" y="490" width="1180" height="180" class="layer"/>
+  <text x="90" y="530" class="txt">Time-Series Layer</text>
+  <text x="90" y="558" class="small">High-frequency metrics with retention tiers and downsampling pipeline.</text>
+  <rect x="90" y="576" width="520" height="72" class="db"/>
+  <text x="290" y="610" class="small">InfluxDB 3 (Raw + Aggregates)</text>
+  <rect x="650" y="576" width="540" height="72" class="db"/>
+  <text x="840" y="610" class="small">Cold Archive / Exported Reports</text>
+
+  <path d="M250 232 L350 366" class="edge"/>
+  <path d="M580 232 L350 366" class="edge"/>
+  <path d="M990 232 L920 576" class="edge"/>
+  <path d="M350 438 L350 576" class="edge"/>
+  <path d="M350 438 L920 576" class="edge"/>
+</svg>
+

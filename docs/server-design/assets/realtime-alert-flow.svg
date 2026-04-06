@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="700" viewBox="0 0 1400 700">
+  <defs>
+    <style>
+      .title { font: 700 28px Arial, sans-serif; fill: #111827; }
+      .lane { fill: #f9fafb; stroke: #d1d5db; stroke-width: 1.5; }
+      .name { font: 600 16px Arial, sans-serif; fill: #111827; }
+      .step { fill: #eef2ff; stroke: #4f46e5; stroke-width: 1.8; rx: 10; ry: 10; }
+      .text { font: 500 14px Arial, sans-serif; fill: #1f2937; }
+      .edge { stroke: #111827; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#111827"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="48" class="title">Real-time Alert Pipeline</text>
+
+  <rect x="40" y="90" width="1300" height="80" class="lane"/>
+  <text x="60" y="138" class="name">1. Ingest</text>
+
+  <rect x="40" y="190" width="1300" height="120" class="lane"/>
+  <text x="60" y="230" class="name">2. Stream and Consumers</text>
+
+  <rect x="40" y="330" width="1300" height="120" class="lane"/>
+  <text x="60" y="370" class="name">3. Decision and Persistence</text>
+
+  <rect x="40" y="470" width="1300" height="120" class="lane"/>
+  <text x="60" y="510" class="name">4. Notification and Query</text>
+
+  <rect x="140" y="102" width="200" height="56" class="step"/>
+  <text x="165" y="136" class="text">POST /events</text>
+
+  <rect x="430" y="102" width="240" height="56" class="step"/>
+  <text x="448" y="136" class="text">Validation + Idempotency</text>
+
+  <rect x="760" y="102" width="230" height="56" class="step"/>
+  <text x="795" y="136" class="text">XADD stream:events</text>
+
+  <rect x="260" y="220" width="240" height="60" class="step"/>
+  <text x="292" y="255" class="text">Rule Consumer</text>
+
+  <rect x="620" y="220" width="260" height="60" class="step"/>
+  <text x="652" y="255" class="text">Time-series Consumer</text>
+
+  <rect x="980" y="220" width="260" height="60" class="step"/>
+  <text x="1000" y="255" class="text">Retry + Dead Letter Policy</text>
+
+  <rect x="220" y="360" width="260" height="60" class="step"/>
+  <text x="246" y="395" class="text">Score + State Machine</text>
+
+  <rect x="560" y="360" width="220" height="60" class="step"/>
+  <text x="595" y="395" class="text">MySQL Alert TX</text>
+
+  <rect x="860" y="360" width="260" height="60" class="step"/>
+  <text x="892" y="395" class="text">Redis Cooldown Cache</text>
+
+  <rect x="220" y="500" width="260" height="60" class="step"/>
+  <text x="270" y="535" class="text">WebSocket Push</text>
+
+  <rect x="560" y="500" width="220" height="60" class="step"/>
+  <text x="614" y="535" class="text">InfluxDB Write</text>
+
+  <rect x="860" y="500" width="320" height="60" class="step"/>
+  <text x="884" y="535" class="text">Query API (alerts/trends/ranking)</text>
+
+  <path d="M340 130 L430 130" class="edge"/>
+  <path d="M670 130 L760 130" class="edge"/>
+
+  <path d="M875 158 L380 220" class="edge"/>
+  <path d="M875 158 L750 220" class="edge"/>
+  <path d="M875 158 L1110 220" class="edge"/>
+
+  <path d="M380 280 L350 360" class="edge"/>
+  <path d="M380 280 L670 360" class="edge"/>
+  <path d="M380 280 L990 360" class="edge"/>
+
+  <path d="M350 420 L350 500" class="edge"/>
+  <path d="M750 280 L670 500" class="edge"/>
+  <path d="M670 420 L1020 500" class="edge"/>
+</svg>
+
