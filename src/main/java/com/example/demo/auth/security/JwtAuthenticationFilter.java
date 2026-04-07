@@ -41,20 +41,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String header = request.getHeader("Authorization");
-        if (!StringUtils.hasText(header) || !header.startsWith("Bearer ")) {
+        String token = resolveToken(request);
+        if (!StringUtils.hasText(token)) {
             filterChain.doFilter(request, response);
             return;
         }
 
         if (SecurityContextHolder.getContext().getAuthentication() != null) {
             filterChain.doFilter(request, response);
-            return;
-        }
-
-        String token = header.substring(7).trim();
-        if (!StringUtils.hasText(token)) {
-            writeUnauthorized(response);
             return;
         }
 
@@ -70,6 +64,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             SecurityContextHolder.clearContext();
             writeUnauthorized(response);
         }
+    }
+
+    private String resolveToken(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (StringUtils.hasText(header) && header.startsWith("Bearer ")) {
+            String token = header.substring(7).trim();
+            if (StringUtils.hasText(token)) {
+                return token;
+            }
+            return null;
+        }
+
+        String tokenFromQuery = request.getParameter("token");
+        if (!StringUtils.hasText(tokenFromQuery)) {
+            return null;
+        }
+        return tokenFromQuery.trim();
     }
 
     private void writeUnauthorized(HttpServletResponse response) throws IOException {

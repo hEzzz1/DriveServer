@@ -6,6 +6,7 @@ import com.example.demo.alert.dto.AlertOperationResponseData;
 import com.example.demo.alert.dto.CreateAlertRequest;
 import com.example.demo.alert.entity.AlertActionLog;
 import com.example.demo.alert.entity.AlertEvent;
+import com.example.demo.alert.event.AlertRealtimeEvent;
 import com.example.demo.alert.model.AlertActionType;
 import com.example.demo.alert.model.AlertStatus;
 import com.example.demo.alert.repository.AlertActionLogRepository;
@@ -13,6 +14,7 @@ import com.example.demo.alert.repository.AlertEventRepository;
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -31,11 +33,14 @@ public class AlertService {
 
     private final AlertEventRepository alertEventRepository;
     private final AlertActionLogRepository alertActionLogRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     public AlertService(AlertEventRepository alertEventRepository,
-                        AlertActionLogRepository alertActionLogRepository) {
+                        AlertActionLogRepository alertActionLogRepository,
+                        ApplicationEventPublisher applicationEventPublisher) {
         this.alertEventRepository = alertEventRepository;
         this.alertActionLogRepository = alertActionLogRepository;
+        this.applicationEventPublisher = applicationEventPublisher;
     }
 
     @Transactional
@@ -63,6 +68,7 @@ public class AlertService {
 
         AlertEvent saved = alertEventRepository.save(alert);
         saveActionLog(saved.getId(), AlertActionType.CREATE, operator.getUserId(), now, normalizedRemark);
+        applicationEventPublisher.publishEvent(AlertRealtimeEvent.created(saved));
         return toOperationResponse(saved, AlertActionType.CREATE);
     }
 
@@ -118,6 +124,7 @@ public class AlertService {
 
         AlertEvent saved = alertEventRepository.save(alert);
         saveActionLog(saved.getId(), actionType, operator.getUserId(), now, normalizedRemark);
+        applicationEventPublisher.publishEvent(AlertRealtimeEvent.updated(saved, actionType));
         return toOperationResponse(saved, actionType);
     }
 
