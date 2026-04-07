@@ -23,3 +23,13 @@ auth:
     secret: testDriveServerJwtSecretAtLeast32Bytes
     expire-seconds: 3600
     issuer: DriveServerTest
+
+ingest:
+  security:
+    device-tokens: test-device-token
+  idempotency:
+    store: memory
+    ttl: 24h
+  stream:
+    producer: noop
+    key: stream:events

@@ -135,7 +135,7 @@ class AuthModuleIntegrationTest {
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setNickname(username);
-        user.setStatus(status);
+        user.setStatus((byte) status);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
         return userAccountRepository.save(user);

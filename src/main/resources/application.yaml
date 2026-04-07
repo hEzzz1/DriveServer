@@ -41,3 +41,13 @@ auth:
     secret: ${JWT_SECRET:DriveServerDevSecretDriveServerDevSecret1234}
     expire-seconds: ${JWT_EXPIRE_SECONDS:7200}
     issuer: ${JWT_ISSUER:DriveServer}
+
+ingest:
+  security:
+    device-tokens: ${INGEST_DEVICE_TOKENS:dev-device-token}
+  idempotency:
+    store: ${INGEST_IDEMPOTENCY_STORE:redis}
+    ttl: ${INGEST_IDEMPOTENCY_TTL:24h}
+  stream:
+    producer: ${INGEST_STREAM_PRODUCER:redis}
+    key: ${INGEST_STREAM_KEY:stream:events}

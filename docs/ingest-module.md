@@ -1,0 +1,119 @@
+# Ingest Module 实现文档
+
+本文档说明 `DriveServer` 当前已落地的事件接入能力，重点覆盖：
+1. `/api/v1/events` 参数校验
+2. 基于 `eventId` 的幂等控制
+
+## 1. 目标范围
+已实现内容：
+1. 单条事件接入接口 `POST /api/v1/events`
+2. 请求体字段校验（必填、长度、分值范围）
+3. 幂等键 `eventId` 去重（默认窗口 24 小时）
+4. 设备鉴权（`X-Device-Token`）
+5. Redis Stream 入流（`XADD stream:events`）
+6. 统一错误码返回（`40001` / `40002`）
+
+## 2. 接口说明
+### 2.1 事件上报
+- 方法：`POST`
+- 路径：`/api/v1/events`
+- 鉴权：`X-Device-Token: <device_token>`
+
+成功响应：
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "accepted": true
+  },
+  "traceId": "trc_xxx"
+}
+```
+
+## 3. 参数校验规则
+请求 DTO：`IngestEventRequest`
+
+| 字段 | 必填 | 规则 |
+|---|---|---|
+| `eventId` | 是 | `@NotBlank`，最大 64 |
+| `fleetId` | 是 | `@NotBlank`，最大 64 |
+| `vehicleId` | 是 | `@NotBlank`，最大 64 |
+| `driverId` | 是 | `@NotBlank`，最大 64 |
+| `eventTime` | 是 | `@NotNull`，`OffsetDateTime` |
+| `fatigueScore` | 是 | `0.0 ~ 1.0` |
+| `distractionScore` | 是 | `0.0 ~ 1.0` |
+| `perclos` | 否 | `0.0 ~ 1.0` |
+| `blinkRate` | 否 | `>= 0` |
+| `yawnCount` | 否 | `>= 0` 整数 |
+| `headPose` | 否 | 最大 32 |
+| `algorithmVer` | 否 | 最大 32 |
+
+参数不合法时统一返回：
+1. HTTP `400`
+2. `code = 40001`
+
+## 4. 幂等设计
+### 4.1 幂等键
+`eventId` 作为全局幂等键。
+
+### 4.2 默认存储（Redis）
+1. key 前缀：`ingest:idempotency:event:{eventId}`
+2. 操作：`SETNX + TTL`
+3. TTL：默认 `24h`
+
+当 `SETNX` 失败（同 `eventId` 已存在）时返回：
+1. HTTP `409`
+2. `code = 40002`
+
+### 4.3 可切换存储策略
+通过配置切换幂等存储：
+1. `redis`（默认，生产推荐）
+2. `memory`（测试环境）
+
+## 5. 配置说明
+`application.yaml`：
+
+```yaml
+ingest:
+  security:
+    device-tokens: ${INGEST_DEVICE_TOKENS:dev-device-token}
+  idempotency:
+    store: ${INGEST_IDEMPOTENCY_STORE:redis}
+    ttl: ${INGEST_IDEMPOTENCY_TTL:24h}
+  stream:
+    producer: ${INGEST_STREAM_PRODUCER:redis}
+    key: ${INGEST_STREAM_KEY:stream:events}
+```
+
+`src/test/resources/application.yaml`：
+
+```yaml
+ingest:
+  security:
+    device-tokens: test-device-token
+  idempotency:
+    store: memory
+    ttl: 24h
+  stream:
+    producer: noop
+    key: stream:events
+```
+
+## 6. 错误码
+1. `40001`：请求参数不合法
+2. `40002`：幂等冲突（重复事件）
+
+## 7. 测试覆盖
+集成测试类：`IngestModuleIntegrationTest`
+
+已覆盖场景：
+1. 合法请求返回 `code=0` 且 `accepted=true`
+2. 分值越界返回 `40001`
+3. 重复 `eventId` 返回 `40002`（HTTP 409）
+4. 缺失或错误 `X-Device-Token` 返回 `40101`
+
+执行命令：
+```bash
+./mvnw test -q
+```

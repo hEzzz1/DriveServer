@@ -27,7 +27,7 @@ public class UserAccount {
     private String nickname;
 
     @Column(nullable = false)
-    private Integer status;
+    private Byte status;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -67,11 +67,11 @@ public class UserAccount {
         this.nickname = nickname;
     }
 
-    public Integer getStatus() {
+    public Byte getStatus() {
         return status;
     }
 
-    public void setStatus(Integer status) {
+    public void setStatus(Byte status) {
         this.status = status;
     }
 

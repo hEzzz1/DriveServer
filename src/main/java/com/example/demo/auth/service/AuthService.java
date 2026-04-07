@@ -41,7 +41,7 @@ public class AuthService {
         UserAccount user = userAccountRepository.findByUsername(normalizedUsername)
                 .orElseThrow(() -> new BusinessException(ApiCode.UNAUTHORIZED, "用户名或密码错误"));
 
-        if (user.getStatus() == null || user.getStatus() == 0) {
+        if (user.getStatus() == null || user.getStatus() == (byte) 0) {
             throw new BusinessException(ApiCode.UNAUTHORIZED, "账号已被禁用");
         }
 

@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 public enum ApiCode {
     SUCCESS(0, "ok", HttpStatus.OK),
     INVALID_PARAM(40001, "请求参数不合法", HttpStatus.BAD_REQUEST),
+    IDEMPOTENT_CONFLICT(40002, "幂等冲突（重复事件）", HttpStatus.CONFLICT),
     UNAUTHORIZED(40101, "未授权或token失效", HttpStatus.UNAUTHORIZED),
     FORBIDDEN(40301, "无权限访问", HttpStatus.FORBIDDEN),
     NOT_FOUND(40401, "资源不存在", HttpStatus.NOT_FOUND),
