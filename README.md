@@ -5,6 +5,7 @@
 - [Auth 模块实现文档](./docs/auth-module.md)
 - [Ingest 模块实现文档](./docs/ingest-module.md)
 - [Rule 模块实现文档](./docs/rule-module.md)
+- [Alert 模块实现文档](./docs/alert-module.md)
 - [服务器设计总览](./docs/server-design/00-index.md)
 - [需求规格说明书](./docs/server-design/01-requirements.md)
 - [总体架构设计说明书](./docs/server-design/02-architecture.md)
