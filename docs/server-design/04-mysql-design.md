@@ -228,3 +228,15 @@ CREATE TABLE daily_report (
 1. 告警创建与操作日志写入在同一事务内。
 2. 状态更新采用乐观锁（可选 `version` 字段）。
 3. 幂等事件通过 `event_id` 唯一键保证不重复处理。
+
+## 8. Flyway 迁移清单（当前实现）
+1. `V1__init_core_tables.sql`：初始化 `user_account`、`rule_config`、`alert_event`、`alert_action_log`、`system_audit_log`。
+2. `V2__seed_default_data.sql`：初始化默认管理员账号与默认规则数据。
+3. `V3__init_auth_rbac.sql`：初始化 `role`、`user_role` 及默认角色绑定。
+4. `V4__strengthen_user_rule_alert_audit_schema.sql`：补充基础完整性约束。
+
+`V4` 约束补强范围：
+1. `user`：`user_account.status` 检查约束。
+2. `rule`：`rule_config` 的阈值、时长、开关、版本检查约束。
+3. `alert`：`alert_event` 和 `alert_action_log` 的状态/分值/动作类型检查约束，以及关联外键。
+4. `audit`：`system_audit_log.operator_id` 到 `user_account.id` 的外键约束。

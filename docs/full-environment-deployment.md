@@ -19,7 +19,9 @@
 4. [`src/main/resources/application-local.yaml`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/application-local.yaml)
 5. [`src/main/resources/db/migration/V1__init_core_tables.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V1__init_core_tables.sql)
 6. [`src/main/resources/db/migration/V2__seed_default_data.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V2__seed_default_data.sql)
-7. [`src/test/resources/application.yaml`](/Users/m1ngyangg/Documents/DriveServer/src/test/resources/application.yaml)
+7. [`src/main/resources/db/migration/V3__init_auth_rbac.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V3__init_auth_rbac.sql)
+8. [`src/main/resources/db/migration/V4__strengthen_user_rule_alert_audit_schema.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V4__strengthen_user_rule_alert_audit_schema.sql)
+9. [`src/test/resources/application.yaml`](/Users/m1ngyangg/Documents/DriveServer/src/test/resources/application.yaml)
 
 ## 3. 软件安装
 建议版本：
@@ -108,7 +110,7 @@ cd /Users/m1ngyangg/Documents/DriveServer
 
 期望日志关键字：
 1. `Started DemoApplication`
-2. `Successfully applied 2 migrations`
+2. `Successfully applied 4 migrations`（首次启动空库时）
 3. `Tomcat started on port 8080`
 
 健康检查：
@@ -118,8 +120,10 @@ curl http://localhost:8080/actuator/health
 
 ## 8. Flyway 与初始化数据
 应用首次启动会自动执行：
-1. `V1__init_core_tables.sql`：核心表结构
-2. `V2__seed_default_data.sql`：默认管理员与规则
+1. `V1__init_core_tables.sql`：`user/rule/alert/audit` 核心表结构
+2. `V2__seed_default_data.sql`：默认管理员与默认规则
+3. `V3__init_auth_rbac.sql`：RBAC 表结构与默认角色初始化
+4. `V4__strengthen_user_rule_alert_audit_schema.sql`：补充外键与检查约束
 
 默认管理员：
 1. 用户名：`admin`

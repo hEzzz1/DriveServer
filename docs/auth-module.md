@@ -21,13 +21,17 @@
 3. `@AnyUserRole`：`ADMIN` / `OPERATOR` / `VIEWER`
 
 ## 3. 数据库变更
-新增 Flyway 脚本：`V3__init_auth_rbac.sql`
+相关 Flyway 脚本：
+1. `V3__init_auth_rbac.sql`
+2. `V4__strengthen_user_rule_alert_audit_schema.sql`
 
 主要变更：
 1. 创建 `role` 表
 2. 创建 `user_role` 表
 3. 初始化默认角色 `ADMIN/OPERATOR/VIEWER`
 4. 为默认用户 `admin` 绑定 `ADMIN` 角色
+5. 为 `user_role.user_id` 与 `user_role.role_id` 增加外键约束
+6. 为 `user_account.status` 增加状态值检查约束
 
 ## 4. 配置说明
 `application.yaml` 新增：

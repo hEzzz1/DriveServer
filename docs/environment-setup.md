@@ -71,10 +71,11 @@ docker exec -it driveserver-influxdb3 influxdb3 --version
 ```
 
 ## 5. 默认初始化数据
-Flyway 会自动执行 `V1`、`V2` 脚本，包含：
-1. 核心表结构
-2. 默认管理员账号
-3. 默认风险规则（高/中/低）
+Flyway 会自动执行 `V1 ~ V4` 脚本，包含：
+1. `V1__init_core_tables.sql`：`user/rule/alert/audit` 核心表结构
+2. `V2__seed_default_data.sql`：默认管理员账号与默认风险规则（高/中/低）
+3. `V3__init_auth_rbac.sql`：`role`、`user_role` 及默认角色初始化
+4. `V4__strengthen_user_rule_alert_audit_schema.sql`：外键与检查约束补强（数据完整性）
 
 默认管理员：
 1. 用户名：`admin`
@@ -110,5 +111,5 @@ management:
 
 ## 7. 建议的下一步
 1. 在当前仓库新增 `backend/` 模块（Spring Boot 3.5.x + Maven）。
-2. 创建 Flyway 首版脚本（用户、规则、告警、审计核心表）。
+2. 在现有 `V1 ~ V4` 基础上扩展业务主数据（`fleet/vehicle/driver`）迁移脚本。
 3. 优先打通 MVP 链路：`/auth/login`、`/events`、`/alerts`。
