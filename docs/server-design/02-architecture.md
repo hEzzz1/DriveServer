@@ -136,8 +136,11 @@ API-->>UI: trend response
 2. 消费失败：消息留在 PEL，重试超过阈值进入死信集合。
 3. DB异常：事务回滚，不确认 Stream 消息，等待重试。
 4. Influx写入失败：写失败队列，定时补偿。
+5. 全局兜底异常：记录完整堆栈，日志字段包含 `traceId`、`method`、`uri`。
+6. 认证授权失败：`401/403` 记录简要原因（`reason`）并带 `traceId`。
 
 ## 11. 可观测性
 1. 指标：QPS、P95、错误率、消费延迟、积压长度。
 2. 日志：接入日志、规则命中日志、告警流转日志、审计日志。
-3. 链路：traceId 在 API、Stream、DB日志中贯穿。
+3. 请求日志：每请求一行，固定字段至少含 `method`、`path`、`status`、`durationMs`、`traceId`。
+4. 链路：traceId 在 API、Stream、DB日志中贯穿。

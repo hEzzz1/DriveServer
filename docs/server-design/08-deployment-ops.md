@@ -62,9 +62,11 @@ A --> W["WebSocket Clients"]
 4. JVM：堆内存、GC次数、线程池队列长度。
 
 ### 7.2 日志
-1. 结构化 JSON 日志。
-2. 请求日志含 `traceId`、`operator`、`latency`。
-3. 关键业务日志：规则命中、告警生成、状态迁移。
+1. 应用日志采用统一 pattern，并固定输出 `traceId`（`%X{traceId}`）。
+2. 请求日志保持“每个请求一行”，至少包含 `method`、`path`、`status`、`durationMs`、`traceId`。
+3. 401/403 日志输出简要原因（含 `traceId` + `method` + `path` + `reason`）。
+4. 全局兜底异常输出完整异常栈（含 `traceId` + `method` + `uri`）。
+5. 同时输出控制台和滚动文件日志，文件路径为 `logs/app.log`。
 
 ### 7.3 告警
 1. API 错误率超过阈值告警。
@@ -80,7 +82,7 @@ A --> W["WebSocket Clients"]
 ## 9. 运维 Runbook（简版）
 ### 9.1 API 5xx飙升
 1. 检查最近发布版本与配置变更。
-2. 查看应用日志与依赖健康。
+2. 优先按 `traceId` 检索 `logs/app.log`，定位首个兜底异常栈。
 3. 必要时回滚到上一个稳定版本。
 
 ### 9.2 Stream 积压

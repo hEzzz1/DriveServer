@@ -9,6 +9,7 @@ public enum ApiCode {
     UNAUTHORIZED(40101, "未授权或token失效", HttpStatus.UNAUTHORIZED),
     FORBIDDEN(40301, "无权限访问", HttpStatus.FORBIDDEN),
     NOT_FOUND(40401, "资源不存在", HttpStatus.NOT_FOUND),
+    METHOD_NOT_ALLOWED(40501, "请求方法不支持", HttpStatus.METHOD_NOT_ALLOWED),
     INTERNAL_ERROR(50001, "内部服务器错误", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final int code;

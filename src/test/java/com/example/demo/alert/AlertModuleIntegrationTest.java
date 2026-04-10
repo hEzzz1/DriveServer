@@ -23,6 +23,7 @@ import java.time.LocalDateTime;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -191,6 +192,53 @@ class AlertModuleIntegrationTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(40001));
+    }
+
+    @Test
+    void listAlertsShouldReturnPagedData() throws Exception {
+        String operatorToken = loginAndGetToken("operator", "123456");
+        String viewerToken = loginAndGetToken("viewer", "123456");
+
+        createAlert(operatorToken);
+
+        mockMvc.perform(get("/api/v1/alerts")
+                        .header("Authorization", "Bearer " + viewerToken)
+                        .queryParam("page", "1")
+                        .queryParam("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.page").value(1))
+                .andExpect(jsonPath("$.data.size").value(20))
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].status").value(0));
+    }
+
+    @Test
+    void alertDetailShouldBeAccessibleByViewer() throws Exception {
+        String operatorToken = loginAndGetToken("operator", "123456");
+        String viewerToken = loginAndGetToken("viewer", "123456");
+
+        Long alertId = createAlert(operatorToken);
+
+        mockMvc.perform(get("/api/v1/alerts/{id}", alertId)
+                        .header("Authorization", "Bearer " + viewerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.id").value(alertId))
+                .andExpect(jsonPath("$.data.alertNo").isNotEmpty())
+                .andExpect(jsonPath("$.data.status").value(0));
+    }
+
+    @Test
+    void methodNotAllowedShouldReturn405InsteadOf500() throws Exception {
+        String operatorToken = loginAndGetToken("operator", "123456");
+        Long alertId = createAlert(operatorToken);
+
+        mockMvc.perform(put("/api/v1/alerts/{id}/close", alertId)
+                        .header("Authorization", "Bearer " + operatorToken))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.code").value(40501));
     }
 
     private Long createAlert(String token) throws Exception {
