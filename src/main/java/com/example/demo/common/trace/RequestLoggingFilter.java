@@ -4,35 +4,37 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.MDC;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.UUID;
 
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
-public class TraceIdFilter extends OncePerRequestFilter {
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS");
+@Order(Ordered.LOWEST_PRECEDENCE - 10)
+public class RequestLoggingFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(RequestLoggingFilter.class);
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String traceId = "trc_" + LocalDateTime.now().format(FORMATTER) + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-        TraceIdContext.setTraceId(traceId);
-        MDC.put("traceId", traceId);
-        response.setHeader("X-Trace-Id", traceId);
+        long start = System.nanoTime();
         try {
             filterChain.doFilter(request, response);
         } finally {
-            TraceIdContext.clear();
-            MDC.remove("traceId");
+            long durationMs = (System.nanoTime() - start) / 1_000_000;
+            log.info("HTTP {} {} status={} durationMs={} traceId={} clientIp={}",
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    response.getStatus(),
+                    durationMs,
+                    TraceIdContext.getTraceId(),
+                    request.getRemoteAddr());
         }
     }
 }
