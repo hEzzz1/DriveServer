@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -28,12 +29,16 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             long durationMs = (System.nanoTime() - start) / 1_000_000;
-            log.info("HTTP {} {} status={} durationMs={} traceId={} clientIp={}",
+            String traceId = TraceIdContext.getTraceId();
+            if (!StringUtils.hasText(traceId)) {
+                traceId = "-";
+            }
+            log.info("HTTP_REQUEST method={} path={} status={} durationMs={} traceId={} clientIp={}",
                     request.getMethod(),
                     request.getRequestURI(),
                     response.getStatus(),
                     durationMs,
-                    TraceIdContext.getTraceId(),
+                    traceId,
                     request.getRemoteAddr());
         }
     }

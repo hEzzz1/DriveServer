@@ -107,7 +107,14 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [traceId=%X{traceId:-}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [traceId=%X{traceId:-}] - %msg%n"
 ```
+
+项目默认使用 `src/main/resources/logback-spring.xml` 输出控制台与滚动文件日志，日志文件路径为 `logs/app.log`。
 
 ## 7. 建议的下一步
 1. 在当前仓库新增 `backend/` 模块（Spring Boot 3.5.x + Maven）。

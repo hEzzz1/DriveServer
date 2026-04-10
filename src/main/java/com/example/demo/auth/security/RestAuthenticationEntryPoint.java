@@ -2,6 +2,7 @@ package com.example.demo.auth.security;
 
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.api.ApiResponse;
+import com.example.demo.common.trace.TraceIdContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 
@@ -30,13 +32,23 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
     public void commence(HttpServletRequest request,
                          HttpServletResponse response,
                          AuthenticationException authException) throws IOException, ServletException {
-        log.warn("Authentication required: method={} path={} reason={}",
+        log.warn("Authentication required: traceId={} method={} path={} reason={}",
+                TraceIdContext.getTraceId(),
                 request.getMethod(),
                 request.getRequestURI(),
-                authException.getClass().getSimpleName());
+                shortReason(authException));
         response.setStatus(ApiCode.UNAUTHORIZED.getHttpStatus().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         objectMapper.writeValue(response.getWriter(), ApiResponse.error(ApiCode.UNAUTHORIZED, ApiCode.UNAUTHORIZED.getMessage()));
+    }
+
+    private String shortReason(AuthenticationException ex) {
+        String className = ex.getClass().getSimpleName();
+        String message = ex.getMessage();
+        if (StringUtils.hasText(message)) {
+            return className + ": " + message;
+        }
+        return className;
     }
 }

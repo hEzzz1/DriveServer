@@ -17,11 +17,12 @@
 2. [`pom.xml`](/Users/m1ngyangg/Documents/DriveServer/pom.xml)
 3. [`src/main/resources/application.yaml`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/application.yaml)
 4. [`src/main/resources/application-local.yaml`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/application-local.yaml)
-5. [`src/main/resources/db/migration/V1__init_core_tables.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V1__init_core_tables.sql)
-6. [`src/main/resources/db/migration/V2__seed_default_data.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V2__seed_default_data.sql)
-7. [`src/main/resources/db/migration/V3__init_auth_rbac.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V3__init_auth_rbac.sql)
-8. [`src/main/resources/db/migration/V4__strengthen_user_rule_alert_audit_schema.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V4__strengthen_user_rule_alert_audit_schema.sql)
-9. [`src/test/resources/application.yaml`](/Users/m1ngyangg/Documents/DriveServer/src/test/resources/application.yaml)
+5. [`src/main/resources/logback-spring.xml`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/logback-spring.xml)
+6. [`src/main/resources/db/migration/V1__init_core_tables.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V1__init_core_tables.sql)
+7. [`src/main/resources/db/migration/V2__seed_default_data.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V2__seed_default_data.sql)
+8. [`src/main/resources/db/migration/V3__init_auth_rbac.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V3__init_auth_rbac.sql)
+9. [`src/main/resources/db/migration/V4__strengthen_user_rule_alert_audit_schema.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V4__strengthen_user_rule_alert_audit_schema.sql)
+10. [`src/test/resources/application.yaml`](/Users/m1ngyangg/Documents/DriveServer/src/test/resources/application.yaml)
 
 ## 3. 软件安装
 建议版本：
@@ -95,12 +96,19 @@ docker exec -i driveserver-influxdb3 influxdb3 --version
 
 ## 6. 应用配置说明
 `application.yaml`：默认配置（可通过环境变量覆盖）  
-`application-local.yaml`：本地 profile（启用 Docker Compose 集成）
+`application-local.yaml`：本地 profile（启用 Docker Compose 集成）  
+`logback-spring.xml`：控制台 + 文件滚动日志（`logs/app.log`）
 
 关键变量：
 1. `DB_URL` / `DB_USERNAME` / `DB_PASSWORD`
 2. `REDIS_HOST` / `REDIS_PORT`
 3. `SERVER_PORT`
+
+日志配置要点：
+1. `application.yaml` 与 `application-local.yaml` 统一包含 `traceId` 日志 pattern。
+2. `logback-spring.xml` 开启滚动文件日志，默认落盘：`logs/app.log`。
+3. 发生兜底异常时会输出完整堆栈，并带 `traceId + method + uri`。
+4. 请求日志保持“每请求一行”，至少包含 `status`、`durationMs`、`traceId`、`path`。
 
 ## 7. 启动应用（本地开发）
 ```bash
@@ -112,6 +120,14 @@ cd /Users/m1ngyangg/Documents/DriveServer
 1. `Started DemoApplication`
 2. `Successfully applied 4 migrations`（首次启动空库时）
 3. `Tomcat started on port 8080`
+4. `HTTP_REQUEST method=... path=... status=... durationMs=... traceId=...`
+
+日志文件检查：
+```bash
+cd /Users/m1ngyangg/Documents/DriveServer
+ls -lh logs
+tail -n 100 logs/app.log
+```
 
 健康检查：
 ```bash

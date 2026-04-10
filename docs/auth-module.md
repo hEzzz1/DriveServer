@@ -129,27 +129,43 @@ auth:
 1. `40101`：未授权或 token 失效
 2. `40301`：无权限访问
 
-## 9. 快速联调示例
-### 9.1 登录获取 token
+## 9. 认证授权日志约定
+401/403 场景会记录简要原因日志，便于快速定位鉴权失败原因：
+1. 401（`RestAuthenticationEntryPoint`）：`traceId` + `method` + `path` + `reason`
+2. 403（`RestAccessDeniedHandler`）：`traceId` + `method` + `path` + `reason`
+
+示例：
+```text
+Authentication required: traceId=trc_xxx method=GET path=/api/v1/auth/me reason=BadCredentialsException: Bad credentials
+Access denied: traceId=trc_xxx method=GET path=/api/v1/auth/admin/ping reason=AccessDeniedException: Access is denied
+```
+
+全局兜底异常（`GlobalExceptionHandler`）会输出完整异常栈，并携带：
+1. `traceId`
+2. `method`
+3. `uri`
+
+## 10. 快速联调示例
+### 10.1 登录获取 token
 ```bash
 curl -s -X POST 'http://localhost:8080/api/v1/auth/login' \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"123456"}'
 ```
 
-### 9.2 访问 `/auth/me`
+### 10.2 访问 `/auth/me`
 ```bash
 curl -s 'http://localhost:8080/api/v1/auth/me' \
   -H 'Authorization: Bearer <token>'
 ```
 
-### 9.3 访问管理员接口
+### 10.3 访问管理员接口
 ```bash
 curl -s 'http://localhost:8080/api/v1/auth/admin/ping' \
   -H 'Authorization: Bearer <token>'
 ```
 
-## 10. 测试与验证
+## 11. 测试与验证
 已覆盖集成测试：
 1. 登录成功返回 token 和角色
 2. 登录失败返回 `40101`
