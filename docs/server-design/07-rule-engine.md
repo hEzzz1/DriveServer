@@ -14,7 +14,7 @@
 
 ## 2. 规则模型
 ## 2.1 核心公式
-`risk_score = 0.55 * fatigue_score + 0.45 * distraction_score`
+`risk_score = max(fatigue_score, distraction_score)`
 
 ## 2.2 风险等级映射（默认）
 | 等级 | 条件 |
@@ -23,6 +23,10 @@
 | 中风险（2） | `risk_score >= 0.65` 且持续 `>= 5s` |
 | 低风险（1） | `risk_score >= 0.50` 且持续 `>= 8s` |
 | 正常（0） | 其余情况 |
+
+说明：
+1. `risk_score` 直接取疲劳分和分心分中的较大值。
+2. 因此任一维度达到高风险，都可以单独进入高风险判定。
 
 ## 2.3 可配置参数
 | 参数 | 说明 | 默认值 |

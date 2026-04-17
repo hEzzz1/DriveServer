@@ -9,16 +9,10 @@ import java.util.Objects;
 @Component
 public class RiskScoreCalculator {
 
-    static final BigDecimal FATIGUE_WEIGHT = new BigDecimal("0.55");
-    static final BigDecimal DISTRACTION_WEIGHT = new BigDecimal("0.45");
-
     public BigDecimal calculate(BigDecimal fatigueScore, BigDecimal distractionScore) {
         BigDecimal fatigue = validateScore(fatigueScore, "fatigueScore");
         BigDecimal distraction = validateScore(distractionScore, "distractionScore");
-
-        BigDecimal weightedFatigue = fatigue.multiply(FATIGUE_WEIGHT);
-        BigDecimal weightedDistraction = distraction.multiply(DISTRACTION_WEIGHT);
-        return weightedFatigue.add(weightedDistraction).setScale(4, RoundingMode.HALF_UP);
+        return fatigue.max(distraction).setScale(4, RoundingMode.HALF_UP);
     }
 
     private BigDecimal validateScore(BigDecimal score, String fieldName) {

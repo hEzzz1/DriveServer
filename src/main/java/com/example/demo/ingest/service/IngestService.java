@@ -6,6 +6,8 @@ import com.example.demo.ingest.dto.IngestEventRequest;
 import com.example.demo.ingest.dto.IngestEventResponseData;
 import com.example.demo.ingest.idempotency.EventIdempotencyStore;
 import com.example.demo.ingest.stream.EventStreamPublisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -17,18 +19,22 @@ import java.util.Set;
 public class IngestService {
 
     private static final String INVALID_DEVICE_TOKEN_MSG = "设备token无效";
+    private static final Logger log = LoggerFactory.getLogger(IngestService.class);
 
     private final EventIdempotencyStore eventIdempotencyStore;
     private final EventStreamPublisher eventStreamPublisher;
+    private final EventAlertOrchestrator eventAlertOrchestrator;
     private final Duration eventIdTtl;
     private final Set<String> allowedDeviceTokens;
 
     public IngestService(EventIdempotencyStore eventIdempotencyStore,
                          EventStreamPublisher eventStreamPublisher,
+                         EventAlertOrchestrator eventAlertOrchestrator,
                          @Value("${ingest.idempotency.ttl:24h}") Duration eventIdTtl,
                          @Value("${ingest.security.device-tokens:dev-device-token}") String allowedDeviceTokens) {
         this.eventIdempotencyStore = eventIdempotencyStore;
         this.eventStreamPublisher = eventStreamPublisher;
+        this.eventAlertOrchestrator = eventAlertOrchestrator;
         this.eventIdTtl = eventIdTtl;
         this.allowedDeviceTokens = StringUtils.commaDelimitedListToSet(allowedDeviceTokens).stream()
                 .map(String::trim)
@@ -50,11 +56,18 @@ public class IngestService {
 
         boolean acquired = eventIdempotencyStore.tryAcquire(eventId, eventIdTtl);
         if (!acquired) {
+            log.warn("INGEST_EVENT_DUPLICATE eventId={} vehicleId={}", eventId, request.getVehicleId());
             throw new BusinessException(ApiCode.IDEMPOTENT_CONFLICT, ApiCode.IDEMPOTENT_CONFLICT.getMessage());
         }
 
         try {
             eventStreamPublisher.publish(request);
+            eventAlertOrchestrator.process(request);
+            log.info("INGEST_EVENT_ACCEPTED eventId={} vehicleId={} fleetId={} driverId={}",
+                    request.getEventId(),
+                    request.getVehicleId(),
+                    request.getFleetId(),
+                    request.getDriverId());
         } catch (RuntimeException ex) {
             eventIdempotencyStore.release(eventId);
             throw ex;
@@ -65,10 +78,12 @@ public class IngestService {
 
     private void validateDeviceToken(String deviceToken) {
         if (!StringUtils.hasText(deviceToken)) {
+            log.warn("INGEST_EVENT_UNAUTHORIZED reason=missing_device_token");
             throw new BusinessException(ApiCode.UNAUTHORIZED, INVALID_DEVICE_TOKEN_MSG);
         }
         String normalized = deviceToken.trim();
         if (!allowedDeviceTokens.contains(normalized)) {
+            log.warn("INGEST_EVENT_UNAUTHORIZED reason=invalid_device_token");
             throw new BusinessException(ApiCode.UNAUTHORIZED, INVALID_DEVICE_TOKEN_MSG);
         }
     }

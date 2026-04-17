@@ -3,6 +3,7 @@
 本文档说明 `DriveServer` 当前已落地的事件接入能力，重点覆盖：
 1. `/api/v1/events` 参数校验
 2. 基于 `eventId` 的幂等控制
+3. 自动告警编排
 
 ## 1. 目标范围
 已实现内容：
@@ -11,7 +12,9 @@
 3. 幂等键 `eventId` 去重（默认窗口 24 小时）
 4. 设备鉴权（`X-Device-Token`）
 5. Redis Stream 入流（`XADD stream:events`）
-6. 统一错误码返回（`40001` / `40002`）
+6. 调用规则模块做风险判定、持续时长与冷却控制
+7. 命中规则后自动创建告警（`alert_event` / `alert_action_log`）
+8. 统一错误码返回（`40001` / `40002`）
 
 ## 2. 接口说明
 ### 2.1 事件上报
@@ -30,6 +33,11 @@
   "traceId": "trc_xxx"
 }
 ```
+
+说明：
+1. `accepted=true` 表示事件已通过鉴权、幂等校验并被系统接收。
+2. 事件接收成功后，会继续进入规则判定链路。
+3. 当 `riskScore` 达到规则阈值、持续时长满足且未命中冷却/去重时，系统会自动创建一条告警。
 
 ## 3. 参数校验规则
 请求 DTO：`IngestEventRequest`
@@ -100,11 +108,33 @@ ingest:
     key: stream:events
 ```
 
-## 6. 错误码
+## 6. 自动告警行为
+`/api/v1/events` 接收成功后，当前实现会继续执行以下步骤：
+1. 将 `vehicleId/eventTime/fatigueScore/distractionScore` 转换为规则输入
+2. 计算 `riskScore`
+3. 按高、中、低风险规则依次判定阈值
+4. 校验持续时长
+5. 校验分钟桶去重与冷却窗口
+6. 命中后自动创建一条告警，并通过现有告警实时推送链路广播
+
+当前 `riskScore` 计算方式为：
+
+```text
+risk_score = max(fatigue_score, distraction_score)
+```
+
+## 7. 接口与告警关系
+当前 `/api/v1/events` 与 `/api/v1/alerts` 的关系是：
+1. `/api/v1/events` 上报的是边缘端检测事件
+2. 事件先进入服务端规则判定链路
+3. 只有在满足规则阈值、持续时长和冷却条件时，才会自动生成 `/api/v1/alerts` 中的告警记录
+4. 因此 `/alerts` 中的记录不是简单复制 `/events`，而是服务端规则命中后的结果
+
+## 8. 错误码
 1. `40001`：请求参数不合法
 2. `40002`：幂等冲突（重复事件）
 
-## 7. 测试覆盖
+## 9. 测试覆盖
 集成测试类：`IngestModuleIntegrationTest`
 
 已覆盖场景：
@@ -112,6 +142,7 @@ ingest:
 2. 分值越界返回 `40001`
 3. 重复 `eventId` 返回 `40002`（HTTP 409）
 4. 缺失或错误 `X-Device-Token` 返回 `40101`
+5. 连续高风险事件达到持续时长后自动创建告警
 
 执行命令：
 ```bash

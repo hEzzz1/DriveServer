@@ -13,10 +13,10 @@ class RiskScoreCalculatorTest {
     private final RiskScoreCalculator calculator = new RiskScoreCalculator();
 
     @Test
-    void shouldCalculateWeightedRiskScore() {
+    void shouldUseHigherScoreAsRiskScore() {
         BigDecimal result = calculator.calculate(new BigDecimal("0.82"), new BigDecimal("0.64"));
 
-        assertThat(result).isEqualByComparingTo(new BigDecimal("0.7390"));
+        assertThat(result).isEqualByComparingTo(new BigDecimal("0.8200"));
     }
 
     @Test
@@ -31,5 +31,12 @@ class RiskScoreCalculatorTest {
         assertThatThrownBy(() -> calculator.calculate(new BigDecimal("1.10"), new BigDecimal("0.20")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("fatigueScore");
+    }
+
+    @Test
+    void shouldUseDistractionScoreWhenItIsHigher() {
+        BigDecimal result = calculator.calculate(new BigDecimal("0.31"), new BigDecimal("0.91"));
+
+        assertThat(result).isEqualByComparingTo(new BigDecimal("0.9100"));
     }
 }
