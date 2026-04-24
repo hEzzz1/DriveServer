@@ -3,28 +3,24 @@ package com.example.demo.ingest.dto;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 public class IngestEventRequest {
 
-    @NotBlank
     @Size(max = 64)
     private String eventId;
 
-    @NotBlank
     @Size(max = 64)
     private String fleetId;
 
-    @NotBlank
     @Size(max = 64)
     private String vehicleId;
 
-    @NotBlank
     @Size(max = 64)
     private String driverId;
 
@@ -56,6 +52,20 @@ public class IngestEventRequest {
 
     @Size(max = 32)
     private String algorithmVer;
+
+    @Size(max = 32)
+    private String riskLevel;
+
+    @Size(max = 32)
+    private String dominantRiskType;
+
+    private List<String> triggerReasons;
+
+    private Long windowStartMs;
+
+    private Long windowEndMs;
+
+    private Long createdAtMs;
 
     public String getEventId() {
         return eventId;
@@ -151,5 +161,53 @@ public class IngestEventRequest {
 
     public void setAlgorithmVer(String algorithmVer) {
         this.algorithmVer = algorithmVer;
+    }
+
+    public String getRiskLevel() {
+        return riskLevel;
+    }
+
+    public void setRiskLevel(String riskLevel) {
+        this.riskLevel = riskLevel;
+    }
+
+    public String getDominantRiskType() {
+        return dominantRiskType;
+    }
+
+    public void setDominantRiskType(String dominantRiskType) {
+        this.dominantRiskType = dominantRiskType;
+    }
+
+    public List<String> getTriggerReasons() {
+        return triggerReasons;
+    }
+
+    public void setTriggerReasons(List<String> triggerReasons) {
+        this.triggerReasons = triggerReasons;
+    }
+
+    public Long getWindowStartMs() {
+        return windowStartMs;
+    }
+
+    public void setWindowStartMs(Long windowStartMs) {
+        this.windowStartMs = windowStartMs;
+    }
+
+    public Long getWindowEndMs() {
+        return windowEndMs;
+    }
+
+    public void setWindowEndMs(Long windowEndMs) {
+        this.windowEndMs = windowEndMs;
+    }
+
+    public Long getCreatedAtMs() {
+        return createdAtMs;
+    }
+
+    public void setCreatedAtMs(Long createdAtMs) {
+        this.createdAtMs = createdAtMs;
     }
 }

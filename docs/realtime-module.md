@@ -12,8 +12,9 @@
 1. WebSocket STOMP 端点：`/ws/alerts`
 2. 广播主题：`/topic/alerts`
 3. 推送类型：`ALERT_CREATED`、`ALERT_UPDATED`
-4. 告警事务提交后推送（`AFTER_COMMIT`）
-5. 握手支持 JWT（请求头 `Authorization` 或查询参数 `token`）
+4. 标准消息体：`eventType + traceId + data`
+5. 告警事务提交后推送（`AFTER_COMMIT`）
+6. 握手支持 JWT（请求头 `Authorization` 或查询参数 `token`）
 
 ## 2. 协议说明
 ### 2.1 连接与订阅
@@ -24,30 +25,39 @@
 ### 2.2 推送消息结构
 ```json
 {
-  "type": "ALERT_CREATED",
-  "timestamp": "2026-04-07T10:01:16Z",
-  "payload": {
+  "eventType": "ALERT_CREATED",
+  "traceId": "trc_20260424_001",
+  "data": {
     "alertId": 1001,
     "alertNo": "ALT202604071001161234",
+    "status": 0,
+    "riskLevel": 3,
+    "riskScore": 0.89,
+    "fatigueScore": 0.91,
+    "distractionScore": 0.86,
+    "triggerTime": "2026-04-07T10:01:16Z",
     "fleetId": 1001,
     "vehicleId": 2001,
     "driverId": 3001,
-    "riskLevel": 3,
-    "status": 0,
-    "actionType": "CREATE"
+    "latestActionBy": 1,
+    "latestActionTime": "2026-04-07T10:01:16Z",
+    "remark": "系统自动创建"
   }
 }
 ```
 
 字段说明：
-1. `type`：消息类型（`ALERT_CREATED` 或 `ALERT_UPDATED`）
-2. `timestamp`：告警最近动作时间（UTC）
-3. `payload.alertId`：告警主键
-4. `payload.alertNo`：告警编号
-5. `payload.fleetId/vehicleId/driverId`：业务维度
-6. `payload.riskLevel`：风险等级（`1/2/3`）
-7. `payload.status`：告警状态（`0=NEW`、`1=CONFIRMED`、`2=FALSE_POSITIVE`、`3=CLOSED`）
-8. `payload.actionType`：触发动作（`CREATE`、`CONFIRM`、`FALSE_POSITIVE`、`CLOSE`）
+1. `eventType`：消息类型（`ALERT_CREATED` 或 `ALERT_UPDATED`）
+2. `traceId`：链路追踪 ID，可关联 REST 请求日志与推送日志
+3. `data.alertId`：告警主键
+4. `data.alertNo`：告警编号
+5. `data.status`：告警状态（`0=NEW`、`1=CONFIRMED`、`2=FALSE_POSITIVE`、`3=CLOSED`）
+6. `data.riskLevel`：风险等级（`1/2/3`）
+7. `data.riskScore/fatigueScore/distractionScore`：风险分与来源分
+8. `data.triggerTime`：告警触发时间（UTC）
+9. `data.fleetId/vehicleId/driverId`：业务维度
+10. `data.latestActionBy/latestActionTime`：最近操作人和最近操作时间
+11. `data.remark`：告警当前备注，与 REST 详情字段保持一致
 
 ## 3. 推送时机
 推送由告警服务发布领域事件，实时模块监听后广播：
@@ -72,7 +82,7 @@ WebSocket 握手沿用现有 JWT 鉴权链路：
 2. 推送监听器：`src/main/java/com/example/demo/realtime/listener/AlertRealtimeEventListener.java`
 3. 推送 DTO：
    - `src/main/java/com/example/demo/realtime/dto/AlertRealtimeMessage.java`
-   - `src/main/java/com/example/demo/realtime/dto/AlertPushPayload.java`
+   - `src/main/java/com/example/demo/realtime/dto/AlertRealtimeData.java`
 4. 告警事件模型：`src/main/java/com/example/demo/alert/event/AlertRealtimeEvent.java`
 5. 告警事件发布：`src/main/java/com/example/demo/alert/service/AlertService.java`
 6. JWT 令牌解析入口：`src/main/java/com/example/demo/auth/security/JwtAuthenticationFilter.java`
@@ -82,9 +92,10 @@ WebSocket 握手沿用现有 JWT 鉴权链路：
 
 已覆盖场景：
 1. 登录获取 JWT，建立 WebSocket 连接并订阅 `/topic/alerts`
-2. 创建告警后收到 `ALERT_CREATED`
-3. 确认告警后收到 `ALERT_UPDATED`
-4. 校验 `payload.alertId/actionType/status` 与业务动作一致
+2. 创建告警后收到标准 `ALERT_CREATED` 消息
+3. 确认、误报、关闭三类状态变更后均收到 `ALERT_UPDATED`
+4. 校验 `traceId`、`data.status`、`data.latestActionTime` 与业务动作一致
+5. 校验消息体字段语义与 REST 告警详情一致
 
 执行命令：
 ```bash
@@ -92,6 +103,18 @@ WebSocket 握手沿用现有 JWT 鉴权链路：
 ./mvnw -q test
 ```
 
-## 7. 当前边界
+## 7. 实时刷新联调检查清单
+1. WebSocket 连接成功后，前端连接状态显示为“已连接”。
+2. 创建新告警后，收到 `ALERT_CREATED`，且消息体包含 `eventType/traceId/data`。
+3. `data.alertId/status/riskLevel/riskScore/fatigueScore/distractionScore/triggerTime` 与 REST 详情一致。
+4. 执行 `confirm` 后，收到 `ALERT_UPDATED`，`data.status=1`，`latestActionTime` 前进。
+5. 执行 `false-positive` 后，收到 `ALERT_UPDATED`，`data.status=2`。
+6. 执行 `close` 后，收到 `ALERT_UPDATED`，`data.status=3`。
+7. 当前列表页只做受影响行更新，不做整页重载。
+8. 当前详情页查看同一 `alertId` 时，只局部刷新状态、最新操作信息和日志。
+9. 重复消息以前端幂等键 `eventType + alertId + latestActionTime` 去重。
+10. 连接断开后前端自动重连，失败时提示用户可手动刷新。
+
+## 8. 当前边界
 1. 当前使用 Spring Simple Broker（单节点内存广播）。
 2. 多实例横向扩容时，建议接入 Redis Pub/Sub 做跨节点消息同步。

@@ -12,7 +12,7 @@
 3. 幂等键 `eventId` 去重（默认窗口 24 小时）
 4. 设备鉴权（`X-Device-Token`）
 5. Redis Stream 入流（`XADD stream:events`）
-6. 调用规则模块做风险判定、持续时长与冷却控制
+6. 调用规则模块做风险判定、状态分控制与冷却控制
 7. 命中规则后自动创建告警（`alert_event` / `alert_action_log`）
 8. 统一错误码返回（`40001` / `40002`）
 
@@ -37,7 +37,7 @@
 说明：
 1. `accepted=true` 表示事件已通过鉴权、幂等校验并被系统接收。
 2. 事件接收成功后，会继续进入规则判定链路。
-3. 当 `riskScore` 达到规则阈值、持续时长满足且未命中冷却/去重时，系统会自动创建一条告警。
+3. 当状态分达到规则阈值且未命中冷却/去重时，系统会自动创建一条告警。
 
 ## 3. 参数校验规则
 请求 DTO：`IngestEventRequest`
@@ -45,10 +45,10 @@
 | 字段 | 必填 | 规则 |
 |---|---|---|
 | `eventId` | 是 | `@NotBlank`，最大 64 |
-| `fleetId` | 是 | `@NotBlank`，最大 64 |
+| `fleetId` | 否 | 最大 64，兼容边缘端未绑定车队的场景 |
 | `vehicleId` | 是 | `@NotBlank`，最大 64 |
-| `driverId` | 是 | `@NotBlank`，最大 64 |
-| `eventTime` | 是 | `@NotNull`，`OffsetDateTime` |
+| `driverId` | 否 | 最大 64，兼容边缘端未绑定司机的场景 |
+| `eventTime` | 是 | `@NotNull`，`OffsetDateTime`，兼容别名 `eventTimeUtc` |
 | `fatigueScore` | 是 | `0.0 ~ 1.0` |
 | `distractionScore` | 是 | `0.0 ~ 1.0` |
 | `perclos` | 否 | `0.0 ~ 1.0` |
@@ -56,6 +56,12 @@
 | `yawnCount` | 否 | `>= 0` 整数 |
 | `headPose` | 否 | 最大 32 |
 | `algorithmVer` | 否 | 最大 32 |
+| `riskLevel` | 否 | 最大 32，边缘端风险等级透传 |
+| `dominantRiskType` | 否 | 最大 32，边缘端主导风险类型透传 |
+| `triggerReasons` | 否 | 字符串数组，边缘端触发原因透传 |
+| `windowStartMs` | 否 | `>= 0`，事件窗口开始毫秒时间戳 |
+| `windowEndMs` | 否 | `>= 0`，事件窗口结束毫秒时间戳 |
+| `createdAtMs` | 否 | `>= 0`，边缘端事件创建毫秒时间戳 |
 
 参数不合法时统一返回：
 1. HTTP `400`
@@ -112,8 +118,8 @@ ingest:
 `/api/v1/events` 接收成功后，当前实现会继续执行以下步骤：
 1. 将 `vehicleId/eventTime/fatigueScore/distractionScore` 转换为规则输入
 2. 计算 `riskScore`
-3. 按高、中、低风险规则依次判定阈值
-4. 校验持续时长
+3. 按高、中、低风险规则依次累积疲劳状态分和分心状态分
+4. 判定状态分是否达到阈值
 5. 校验分钟桶去重与冷却窗口
 6. 命中后自动创建一条告警，并通过现有告警实时推送链路广播
 
@@ -123,11 +129,17 @@ ingest:
 risk_score = max(fatigue_score, distraction_score)
 ```
 
+说明：
+1. `riskScore` 用于统一展示与日志输出
+2. 告警触发条件默认按疲劳状态分与分心状态分分别判定，当前口径是“分心更宽松、疲劳更严格”
+3. 规则内部会把原始分数转换成会累积、会衰减的状态分，再比较各档阈值
+
 ## 7. 接口与告警关系
 当前 `/api/v1/events` 与 `/api/v1/alerts` 的关系是：
 1. `/api/v1/events` 上报的是边缘端检测事件
 2. 事件先进入服务端规则判定链路
-3. 只有在满足规则阈值、持续时长和冷却条件时，才会自动生成 `/api/v1/alerts` 中的告警记录
+3. 只有在满足疲劳/分心状态分阈值和冷却条件时，才会自动生成 `/api/v1/alerts` 中的告警记录
+4. 若边缘端仅完成事件上报，但未携带自动建告警所需的业务 ID（如 `fleetId`、`driverId`），服务端仍会接收并透传事件，只跳过自动建告警
 4. 因此 `/alerts` 中的记录不是简单复制 `/events`，而是服务端规则命中后的结果
 
 ## 8. 错误码
@@ -142,7 +154,7 @@ risk_score = max(fatigue_score, distraction_score)
 2. 分值越界返回 `40001`
 3. 重复 `eventId` 返回 `40002`（HTTP 409）
 4. 缺失或错误 `X-Device-Token` 返回 `40101`
-5. 连续高风险事件达到持续时长后自动创建告警
+5. 连续高风险事件推动状态分跨阈值后自动创建告警
 
 执行命令：
 ```bash

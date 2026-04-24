@@ -1,7 +1,7 @@
 package com.example.demo.realtime.listener;
 
 import com.example.demo.alert.event.AlertRealtimeEvent;
-import com.example.demo.realtime.dto.AlertRealtimeData;
+import com.example.demo.realtime.dto.AlertPushPayload;
 import com.example.demo.realtime.dto.AlertRealtimeMessage;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
@@ -21,22 +21,16 @@ public class AlertRealtimeEventListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAlertRealtimeEvent(AlertRealtimeEvent event) {
-        AlertRealtimeData data = new AlertRealtimeData(
+        AlertPushPayload payload = new AlertPushPayload(
                 event.getAlertId(),
                 event.getAlertNo(),
-                event.getStatus(),
-                event.getRiskLevel(),
-                event.getRiskScore(),
-                event.getFatigueScore(),
-                event.getDistractionScore(),
-                event.getTriggerTime(),
                 event.getFleetId(),
                 event.getVehicleId(),
                 event.getDriverId(),
-                event.getLatestActionBy(),
-                event.getLatestActionTime(),
-                event.getRemark());
-        AlertRealtimeMessage message = new AlertRealtimeMessage(event.getEventType(), event.getTraceId(), data);
+                event.getRiskLevel(),
+                event.getStatus(),
+                event.getActionType());
+        AlertRealtimeMessage message = new AlertRealtimeMessage(event.getType(), event.getTimestamp(), payload);
         simpMessagingTemplate.convertAndSend(ALERT_TOPIC, message);
     }
 }

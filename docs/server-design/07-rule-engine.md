@@ -19,22 +19,32 @@
 ## 2.2 风险等级映射（默认）
 | 等级 | 条件 |
 |---|---|
-| 高风险（3） | `risk_score >= 0.80` 且持续 `>= 3s` |
-| 中风险（2） | `risk_score >= 0.65` 且持续 `>= 5s` |
-| 低风险（1） | `risk_score >= 0.50` 且持续 `>= 8s` |
+| 高风险（3） | `fatigue_state_score >= 0.88` 或 `distraction_state_score >= 0.78` |
+| 中风险（2） | `fatigue_state_score >= 0.72` 或 `distraction_state_score >= 0.60` |
+| 低风险（1） | `fatigue_state_score >= 0.58` 或 `distraction_state_score >= 0.45` |
 | 正常（0） | 其余情况 |
 
 说明：
-1. `risk_score` 直接取疲劳分和分心分中的较大值。
-2. 因此任一维度达到高风险，都可以单独进入高风险判定。
+1. `risk_score` 直接取疲劳分和分心分中的较大值，但主要用于展示、日志与详情回传。
+2. 规则是否命中，由每档规则分别比较疲劳状态分与分心状态分。
+3. 默认口径下，分心阈值低于同档疲劳阈值，分心更宽松；疲劳阈值更高，疲劳驾驶更严格。
+4. 状态分会随持续高分逐步升高，间隔拉长时再逐步衰减，不再单独按“累计秒数”判定。
 
 ## 2.3 可配置参数
 | 参数 | 说明 | 默认值 |
 |---|---|---|
-| `risk_threshold_high` | 高风险阈值 | 0.80 |
-| `risk_threshold_mid` | 中风险阈值 | 0.65 |
-| `duration_high_sec` | 高风险持续时长 | 3 |
-| `duration_mid_sec` | 中风险持续时长 | 5 |
+| `risk_threshold_high` | 高风险展示阈值 | 0.80 |
+| `risk_threshold_mid` | 中风险展示阈值 | 0.65 |
+| `risk_threshold_low` | 低风险展示阈值 | 0.50 |
+| `fatigue_threshold_high` | 高风险疲劳阈值 | 0.88 |
+| `fatigue_threshold_mid` | 中风险疲劳阈值 | 0.72 |
+| `fatigue_threshold_low` | 低风险疲劳阈值 | 0.58 |
+| `distraction_threshold_high` | 高风险分心阈值 | 0.78 |
+| `distraction_threshold_mid` | 中风险分心阈值 | 0.60 |
+| `distraction_threshold_low` | 低风险分心阈值 | 0.45 |
+| `duration_high_sec` | 高风险状态分累积秒数 | 2 |
+| `duration_mid_sec` | 中风险状态分累积秒数 | 3 |
+| `duration_low_sec` | 低风险状态分累积秒数 | 4 |
 | `cooldown_sec` | 告警冷却时间 | 60 |
 | `recover_sec` | 恢复判定时长 | 10 |
 
@@ -42,8 +52,8 @@
 ```mermaid
 stateDiagram-v2
   [*] --> NORMAL
-  NORMAL --> OBSERVE: risk_score >= low_threshold
-  OBSERVE --> ALERTING: 连续命中阈值且满足持续时长
+  NORMAL --> OBSERVE: 状态分开始累积
+  OBSERVE --> ALERTING: fatigue/distraction 状态分达到阈值
   ALERTING --> COOLDOWN: 告警已创建
   COOLDOWN --> OBSERVE: 冷却结束且风险仍高
   OBSERVE --> NORMAL: 连续恢复normal >= recover_sec
@@ -52,11 +62,12 @@ stateDiagram-v2
 
 ## 4. 处理流程
 1. 消费一条事件消息，计算 `risk_score`。
-2. 根据车辆维度读取最近窗口状态。
-3. 更新窗口计数与连续时长。
-4. 若满足规则且不在冷却期，创建告警。
-5. 同步写入 `alert_action_log` 的 `CREATE` 记录。
-6. 推送 WebSocket 消息。
+2. 按规则档位分别计算疲劳状态分和分心状态分。
+3. 根据车辆维度读取最近状态分。
+4. 更新状态分的累积与衰减结果。
+5. 若满足规则且不在冷却期，创建告警。
+6. 同步写入 `alert_action_log` 的 `CREATE` 记录。
+7. 推送 WebSocket 消息。
 
 ## 5. 告警去重策略
 1. 去重键：`vehicle_id + rule_id + minute_bucket`。
@@ -76,7 +87,7 @@ stateDiagram-v2
 3. 重试超限：写死信并触发系统告警。
 
 ## 8. 可测试点
-1. 阈值边界值测试（0.64/0.65/0.80）。
-2. 持续时长判定测试（临界秒）。
+1. 疲劳阈值与分心阈值边界值测试。
+2. 状态分累积与衰减判定测试。
 3. 冷却抑制与打破冷却测试。
 4. 状态机流转覆盖测试。

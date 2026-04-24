@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 @Service
@@ -36,7 +37,8 @@ public class EventAlertOrchestrator {
                 request.getVehicleId(),
                 request.getEventTime(),
                 request.getFatigueScore(),
-                request.getDistractionScore());
+                request.getDistractionScore()
+        );
         RuleEvaluationResult result = ruleEngineService.evaluate(ruleEvent, DEFAULT_RULES);
         if (!result.isTriggered()) {
             log.info("EVENT_ALERT_SKIPPED eventId={} vehicleId={} reason={} riskScore={}",
@@ -76,7 +78,7 @@ public class EventAlertOrchestrator {
         createRequest.setDriverId(parseBusinessId(request.getDriverId(), "driverId"));
         createRequest.setRuleId(matchedRule.getRuleId());
         createRequest.setRiskLevel(result.getRiskLevel().getCode());
-        createRequest.setRiskScore(scale(resolveRiskScore(result)));
+        createRequest.setRiskScore(scale(result.getRiskScore()));
         createRequest.setFatigueScore(scale(request.getFatigueScore()));
         createRequest.setDistractionScore(scale(request.getDistractionScore()));
         createRequest.setTriggerTime(request.getEventTime());
@@ -84,16 +86,8 @@ public class EventAlertOrchestrator {
         return createRequest;
     }
 
-    private BigDecimal resolveRiskScore(RuleEvaluationResult result) {
-        BigDecimal riskScore = result.getRiskScore();
-        if (riskScore == null) {
-            throw new IllegalArgumentException("riskScore is missing");
-        }
-        return riskScore;
-    }
-
     private BigDecimal scale(BigDecimal value) {
-        return value == null ? null : value.setScale(4, java.math.RoundingMode.HALF_UP);
+        return value == null ? null : value.setScale(4, RoundingMode.HALF_UP);
     }
 
     private Long parseBusinessId(String rawValue, String fieldName) {

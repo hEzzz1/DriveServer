@@ -7,6 +7,7 @@ import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.connection.stream.StreamRecords;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,10 +29,16 @@ public class RedisEventStreamPublisher implements EventStreamPublisher {
     public void publish(IngestEventRequest request) {
         Map<String, String> body = new LinkedHashMap<>();
         body.put("eventId", request.getEventId());
-        body.put("fleetId", request.getFleetId());
         body.put("vehicleId", request.getVehicleId());
-        body.put("driverId", request.getDriverId());
-        body.put("eventTime", request.getEventTime().toInstant().toString());
+        if (StringUtils.hasText(request.getFleetId())) {
+            body.put("fleetId", request.getFleetId());
+        }
+        if (StringUtils.hasText(request.getDriverId())) {
+            body.put("driverId", request.getDriverId());
+        }
+        String eventTimeUtc = request.getEventTime().toInstant().toString();
+        body.put("eventTime", eventTimeUtc);
+        body.put("eventTimeUtc", eventTimeUtc);
         body.put("fatigueScore", request.getFatigueScore().toPlainString());
         body.put("distractionScore", request.getDistractionScore().toPlainString());
         if (request.getPerclos() != null) {
@@ -48,6 +55,24 @@ public class RedisEventStreamPublisher implements EventStreamPublisher {
         }
         if (request.getAlgorithmVer() != null) {
             body.put("algorithmVer", request.getAlgorithmVer());
+        }
+        if (StringUtils.hasText(request.getRiskLevel())) {
+            body.put("riskLevel", request.getRiskLevel());
+        }
+        if (StringUtils.hasText(request.getDominantRiskType())) {
+            body.put("dominantRiskType", request.getDominantRiskType());
+        }
+        if (request.getTriggerReasons() != null && !request.getTriggerReasons().isEmpty()) {
+            body.put("triggerReasons", String.join(",", request.getTriggerReasons()));
+        }
+        if (request.getWindowStartMs() != null) {
+            body.put("windowStartMs", String.valueOf(request.getWindowStartMs()));
+        }
+        if (request.getWindowEndMs() != null) {
+            body.put("windowEndMs", String.valueOf(request.getWindowEndMs()));
+        }
+        if (request.getCreatedAtMs() != null) {
+            body.put("createdAtMs", String.valueOf(request.getCreatedAtMs()));
         }
 
         RecordId recordId = stringRedisTemplate.opsForStream()
