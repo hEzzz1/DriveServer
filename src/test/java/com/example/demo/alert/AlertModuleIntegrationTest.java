@@ -114,7 +114,10 @@ class AlertModuleIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.items.length()").value(3))
+                .andExpect(jsonPath("$.data.items[0].id").isNumber())
                 .andExpect(jsonPath("$.data.items[0].actionType").value("CREATE"))
+                .andExpect(jsonPath("$.data.items[0].actionBy").isNumber())
+                .andExpect(jsonPath("$.data.items[0].actionTime").isNotEmpty())
                 .andExpect(jsonPath("$.data.items[1].actionType").value("CONFIRM"))
                 .andExpect(jsonPath("$.data.items[2].actionType").value("CLOSE"));
     }
@@ -191,7 +194,38 @@ class AlertModuleIntegrationTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(40001));
+                .andExpect(jsonPath("$.code").value(40001))
+                .andExpect(jsonPath("$.message").value("当前状态不允许该操作"));
+    }
+
+    @Test
+    void falsePositiveAlertShouldRejectFurtherTransitionWithStableBusinessError() throws Exception {
+        String operatorToken = loginAndGetToken("operator", "123456");
+
+        Long alertId = createAlert(operatorToken);
+
+        mockMvc.perform(post("/api/v1/alerts/{id}/false-positive", alertId)
+                        .header("Authorization", "Bearer " + operatorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "remark": "判定误报"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        mockMvc.perform(post("/api/v1/alerts/{id}/close", alertId)
+                        .header("Authorization", "Bearer " + operatorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "remark": "误报后尝试关闭"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40001))
+                .andExpect(jsonPath("$.message").value("当前状态不允许该操作"));
     }
 
     @Test

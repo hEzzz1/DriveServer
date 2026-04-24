@@ -42,7 +42,10 @@
 
 不允许流转：
 1. `FALSE_POSITIVE` 和 `CLOSED` 为终态，不可继续流转。
-2. 非法流转返回 `40001`（请求参数不合法）。
+2. 非法流转统一返回：
+   - HTTP `400`
+   - `code = 40001`
+   - `message = 当前状态不允许该操作`
 
 ## 4. 操作日志
 动作类型：
@@ -54,6 +57,13 @@
 日志接口：`GET /api/v1/alerts/{id}/action-logs`
 - 按 `action_time`、`id` 升序返回，便于前端按时间线展示。
 
+当前日志项结构：
+1. `id`：日志主键，便于稳定追踪与前端 key 绑定
+2. `actionType`：动作枚举
+3. `actionBy`：操作人用户 ID
+4. `actionTime`：操作时间
+5. `actionRemark`：操作备注
+
 ## 5. 测试覆盖
 测试文件：`src/test/java/com/example/demo/alert/AlertModuleIntegrationTest.java`
 
@@ -61,7 +71,8 @@
 1. 创建 -> 确认 -> 关闭，日志链路完整
 2. 创建 -> 误报，日志正确写入
 3. `VIEWER` 无法执行确认操作
-4. 终态后继续流转返回 `40001`
+4. `CLOSED` 与 `FALSE_POSITIVE` 终态后继续流转，统一返回固定业务错误
+5. 操作日志返回稳定结构，包含 `id/actionType/actionBy/actionTime/actionRemark`
 
 执行命令：
 ```bash

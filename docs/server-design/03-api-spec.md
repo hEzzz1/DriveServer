@@ -422,6 +422,16 @@ Content-Type: application/json
 
 成功响应结构与“创建告警”一致，`actionType` 为 `CONFIRM`，`status` 变为 `1`。
 
+非法流转响应：
+```json
+{
+  "code": 40001,
+  "message": "当前状态不允许该操作",
+  "data": null,
+  "traceId": "trc_xxx"
+}
+```
+
 ### 6.5 告警误报标注
 - 方法：`POST`
 - 路径：`/api/v1/alerts/{id}/false-positive`
@@ -436,6 +446,8 @@ Content-Type: application/json
 ```
 
 成功响应结构与“创建告警”一致，`actionType` 为 `FALSE_POSITIVE`，`status` 变为 `2`。
+
+非法流转响应与“告警确认”一致。
 
 ### 6.6 告警关闭
 - 方法：`POST`
@@ -452,6 +464,8 @@ Content-Type: application/json
 
 成功响应结构与“创建告警”一致，`actionType` 为 `CLOSE`，`status` 变为 `3`。
 
+非法流转响应与“告警确认”一致。
+
 ### 6.7 告警操作日志
 - 方法：`GET`
 - 路径：`/api/v1/alerts/{id}/action-logs`
@@ -467,12 +481,14 @@ Content-Type: application/json
     "alertId": 1001,
     "items": [
       {
+        "id": 5001,
         "actionType": "CREATE",
         "actionBy": 1,
         "actionTime": "2026-04-07T10:01:16Z",
         "actionRemark": "连续闭眼触发高风险告警"
       },
       {
+        "id": 5002,
         "actionType": "CONFIRM",
         "actionBy": 2,
         "actionTime": "2026-04-07T10:02:10Z",
@@ -487,6 +503,7 @@ Content-Type: application/json
 说明：
 1. 日志按 `actionTime ASC, id ASC` 返回
 2. 适合前端直接渲染时间线
+3. `id` 为日志主键，可用于稳定追踪、去重和前端列表 key
 
 ### 6.8 告警状态与动作枚举
 状态枚举：
@@ -512,7 +529,10 @@ Content-Type: application/json
 不允许流转：
 1. `FALSE_POSITIVE` 为终态
 2. `CLOSED` 为终态
-3. 非法状态流转返回 `40001`
+3. 非法状态流转统一返回：
+   - HTTP `400`
+   - `code = 40001`
+   - `message = 当前状态不允许该操作`
 
 ## 7. WebSocket 告警推送
 ### 7.1 连接信息

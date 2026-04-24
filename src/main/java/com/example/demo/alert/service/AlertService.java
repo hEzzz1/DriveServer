@@ -38,6 +38,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class AlertService {
 
     private static final DateTimeFormatter ALERT_NO_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    private static final String INVALID_TRANSITION_MESSAGE = "当前状态不允许该操作";
     private static final int DEFAULT_PAGE = 1;
     private static final int DEFAULT_SIZE = 20;
     private static final int MAX_SIZE = 100;
@@ -105,6 +106,7 @@ public class AlertService {
         }
         List<AlertActionLogItemData> items = alertActionLogRepository.findByAlertIdOrderByActionTimeAscIdAsc(alertId).stream()
                 .map(log -> new AlertActionLogItemData(
+                        log.getId(),
                         log.getActionType(),
                         log.getActionBy(),
                         toOffsetDateTime(log.getActionTime()),
@@ -174,7 +176,7 @@ public class AlertService {
         AlertEvent alert = getAlertOrThrow(alertId);
         AlertStatus currentStatus = AlertStatus.fromCode(alert.getStatus());
         if (!canTransit(currentStatus, targetStatus)) {
-            throw new BusinessException(ApiCode.INVALID_PARAM, "当前状态不允许执行" + actionType.name() + "操作");
+            throw new BusinessException(ApiCode.INVALID_PARAM, INVALID_TRANSITION_MESSAGE);
         }
 
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
