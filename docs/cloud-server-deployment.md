@@ -492,9 +492,13 @@ chmod +x deploy/release.sh
 
 脚本会按顺序执行：
 1. 进入项目目录后执行 `git pull --ff-only`
-2. `docker compose --env-file .env.prod -f compose.prod.yaml up -d --build`
+2. 使用 BuildKit 执行 `docker compose --env-file .env.prod -f compose.prod.yaml up -d --build`
 3. `docker compose --env-file .env.prod -f compose.prod.yaml ps`
 4. `curl http://127.0.0.1/actuator/health`
+
+说明：
+1. 当前 `Dockerfile` 已拆分 Maven 依赖预热层，并复用 `/root/.m2` 构建缓存
+2. 只要 `pom.xml` 没变化，重复发布通常不会重新下载全部 Maven 依赖
 
 可选环境变量：
 ```bash
@@ -521,7 +525,7 @@ chmod +x deploy/rollback.sh
 1. 检查工作区是否干净
 2. `git fetch --all --tags`
 3. `git checkout <目标版本>`
-4. `docker compose --env-file .env.prod -f compose.prod.yaml up -d --build`
+4. 使用 BuildKit 执行 `docker compose --env-file .env.prod -f compose.prod.yaml up -d --build`
 5. `curl http://127.0.0.1/actuator/health`
 
 可选环境变量：

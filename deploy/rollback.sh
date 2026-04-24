@@ -61,6 +61,12 @@ compose_cmd() {
   exit 1
 }
 
+compose_up_build() {
+  log "DOCKER_BUILDKIT=${DOCKER_BUILDKIT:-1} COMPOSE_DOCKER_CLI_BUILD=${COMPOSE_DOCKER_CLI_BUILD:-1} compose up -d --build"
+  DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}" COMPOSE_DOCKER_CLI_BUILD="${COMPOSE_DOCKER_CLI_BUILD:-1}" \
+    compose_cmd "$@"
+}
+
 check_http_health() {
   local url="$1"
   require_cmd curl
@@ -112,7 +118,7 @@ rollback_compose() {
 
   ensure_clean_worktree
   checkout_ref
-  run compose_cmd --env-file "$ROOT_DIR/$ENV_FILE" -f "$ROOT_DIR/$COMPOSE_FILE" up -d --build
+  compose_up_build --env-file "$ROOT_DIR/$ENV_FILE" -f "$ROOT_DIR/$COMPOSE_FILE" up -d --build
   run compose_cmd --env-file "$ROOT_DIR/$ENV_FILE" -f "$ROOT_DIR/$COMPOSE_FILE" ps
   check_http_health "http://127.0.0.1${HEALTH_PATH}"
 }
