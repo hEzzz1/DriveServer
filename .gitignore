@@ -40,3 +40,4 @@ docker-data/
 # Env / secrets
 .env
 .env.*
+!.env.prod.example

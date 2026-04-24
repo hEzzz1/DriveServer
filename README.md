@@ -23,4 +23,6 @@
 ## 环境部署
 - [开发环境安装与部署](./docs/environment-setup.md)
 - [全量环境部署手册](./docs/full-environment-deployment.md)
+- [云服务器部署手册](./docs/cloud-server-deployment.md)：支持 `Ubuntu 22.04/24.04` 与 `CentOS 7.9 64位`，包含 `jar + systemd + Nginx` 与 `Docker Compose` 两条路径
+- 生产模板：`Dockerfile`、`compose.prod.yaml`、`.env.prod.example`、`deploy/bootstrap.sh`、`deploy/release.sh`、`deploy/rollback.sh`
 - 一键启动依赖服务：`docker compose up -d`

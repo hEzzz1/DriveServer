@@ -1,0 +1,10 @@
+.git
+.idea
+target
+docker-data
+logs
+exports
+.DS_Store
+*.log
+.env
+.env.*
