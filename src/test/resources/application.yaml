@@ -24,6 +24,12 @@ auth:
     expire-seconds: 3600
     issuer: DriveServerTest
 
+app:
+  cors:
+    allowed-origin-patterns:
+      - http://localhost:5173
+      - http://localhost:4173
+
 ingest:
   security:
     device-tokens: test-device-token
