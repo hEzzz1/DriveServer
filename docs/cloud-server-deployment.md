@@ -350,7 +350,7 @@ chmod +x deploy/release.sh
 ```
 
 脚本会按顺序执行：
-1. `git pull --ff-only`
+1. 进入项目目录后执行 `git pull --ff-only`
 2. `docker compose up -d`
 3. `./mvnw clean package -DskipTests`
 4. `sudo systemctl restart driveserver`
@@ -491,7 +491,7 @@ chmod +x deploy/release.sh
 ```
 
 脚本会按顺序执行：
-1. `git pull --ff-only`
+1. 进入项目目录后执行 `git pull --ff-only`
 2. `docker compose --env-file .env.prod -f compose.prod.yaml up -d --build`
 3. `docker compose --env-file .env.prod -f compose.prod.yaml ps`
 4. `curl http://127.0.0.1/actuator/health`

@@ -70,17 +70,17 @@ check_http_health() {
 }
 
 ensure_clean_worktree() {
-  if [[ -n "$(git -C "$ROOT_DIR" status --porcelain)" ]]; then
+  if [[ -n "$(cd "$ROOT_DIR" && git status --porcelain)" ]]; then
     printf 'Working tree has local changes. Commit or stash them before rollback.\n' >&2
     exit 1
   fi
 }
 
 checkout_ref() {
-  run git -C "$ROOT_DIR" fetch --all --tags
-  run git -C "$ROOT_DIR" checkout "$TARGET_REF"
+  run bash -lc "cd \"$ROOT_DIR\" && git fetch --all --tags"
+  run bash -lc "cd \"$ROOT_DIR\" && git checkout \"$TARGET_REF\""
 
-  if ! git -C "$ROOT_DIR" symbolic-ref -q HEAD >/dev/null; then
+  if ! (cd "$ROOT_DIR" && git symbolic-ref -q HEAD >/dev/null); then
     log "Repository is now in detached HEAD state at $TARGET_REF"
     log "When you want to resume normal releases, switch back to your deploy branch first"
   fi

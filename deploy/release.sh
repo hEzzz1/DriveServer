@@ -72,7 +72,7 @@ git_pull_if_needed() {
     return
   fi
 
-  run git -C "$ROOT_DIR" pull --ff-only
+  run bash -lc "cd \"$ROOT_DIR\" && git pull --ff-only"
 }
 
 deploy_systemd() {
