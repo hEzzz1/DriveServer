@@ -31,7 +31,9 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import java.lang.reflect.Type;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -61,6 +63,8 @@ class RealtimeModuleIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    private Long operatorUserId;
+
     @BeforeEach
     void setUp() {
         userRoleRepository.deleteAll();
@@ -70,10 +74,11 @@ class RealtimeModuleIntegrationTest {
         Role operator = saveRole("OPERATOR", "运维操作员");
         UserAccount operatorUser = saveUser("operator", "123456", 1);
         bindUserRole(operatorUser.getId(), operator.getId());
+        operatorUserId = operatorUser.getId();
     }
 
     @Test
-    void shouldPushAlertCreatedAndUpdatedMessages() throws Exception {
+    void shouldPushStandardRealtimeMessagesForCreateAndStateChanges() throws Exception {
         String token = loginAndGetToken("operator", "123456");
 
         WebSocketStompClient stompClient = new WebSocketStompClient(new StandardWebSocketClient());
@@ -107,29 +112,63 @@ class RealtimeModuleIntegrationTest {
         });
         Thread.sleep(300L);
 
-        Long alertId = createAlert(token);
-        AlertRealtimeMessage created = queue.poll(5, TimeUnit.SECONDS);
-        assertThat(created).isNotNull();
-        assertThat(created.getType()).isEqualTo("ALERT_CREATED");
-        assertThat(created.getPayload().getAlertId()).isEqualTo(alertId);
-        assertThat(created.getPayload().getActionType()).isEqualTo("CREATE");
-        assertThat(created.getPayload().getStatus()).isEqualTo(0);
+        Long confirmedAlertId = createAlert(token, "系统自动创建");
+        assertCreatedMessage(nextMessage(queue), confirmedAlertId, "系统自动创建");
+        confirmAlert(confirmedAlertId, token, "已联系司机");
+        assertUpdatedMessage(nextMessage(queue), confirmedAlertId, 1, "已联系司机");
 
-        confirmAlert(alertId, token);
-        AlertRealtimeMessage updated = queue.poll(5, TimeUnit.SECONDS);
-        assertThat(updated).isNotNull();
-        assertThat(updated.getType()).isEqualTo("ALERT_UPDATED");
-        assertThat(updated.getPayload().getAlertId()).isEqualTo(alertId);
-        assertThat(updated.getPayload().getActionType()).isEqualTo("CONFIRM");
-        assertThat(updated.getPayload().getStatus()).isEqualTo(1);
+        Long falsePositiveAlertId = createAlert(token, "待人工核验");
+        assertCreatedMessage(nextMessage(queue), falsePositiveAlertId, "待人工核验");
+        markFalsePositive(falsePositiveAlertId, token, "已判定误报");
+        assertUpdatedMessage(nextMessage(queue), falsePositiveAlertId, 2, "已判定误报");
+
+        Long closedAlertId = createAlert(token, "边缘端重复提醒");
+        assertCreatedMessage(nextMessage(queue), closedAlertId, "边缘端重复提醒");
+        closeAlert(closedAlertId, token, "风险解除，关闭告警");
+        assertUpdatedMessage(nextMessage(queue), closedAlertId, 3, "风险解除，关闭告警");
 
         session.disconnect();
         stompClient.stop();
     }
 
-    private Long createAlert(String token) throws Exception {
+    private AlertRealtimeMessage nextMessage(LinkedBlockingQueue<AlertRealtimeMessage> queue) throws InterruptedException {
+        AlertRealtimeMessage message = queue.poll(5, TimeUnit.SECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.getTraceId()).isNotBlank();
+        assertThat(message.getData()).isNotNull();
+        return message;
+    }
+
+    private void assertCreatedMessage(AlertRealtimeMessage message, Long alertId, String remark) {
+        assertThat(message.getEventType()).isEqualTo("ALERT_CREATED");
+        assertRealtimePayload(message, alertId, 0, remark);
+    }
+
+    private void assertUpdatedMessage(AlertRealtimeMessage message, Long alertId, int expectedStatus, String remark) {
+        assertThat(message.getEventType()).isEqualTo("ALERT_UPDATED");
+        assertRealtimePayload(message, alertId, expectedStatus, remark);
+    }
+
+    private void assertRealtimePayload(AlertRealtimeMessage message, Long alertId, int expectedStatus, String expectedRemark) {
+        assertThat(message.getData().getAlertId()).isEqualTo(alertId);
+        assertThat(message.getData().getAlertNo()).startsWith("ALT");
+        assertThat(message.getData().getStatus()).isEqualTo(expectedStatus);
+        assertThat(message.getData().getRiskLevel()).isEqualTo(3);
+        assertThat(message.getData().getRiskScore()).isEqualByComparingTo(new BigDecimal("0.89"));
+        assertThat(message.getData().getFatigueScore()).isEqualByComparingTo(new BigDecimal("0.91"));
+        assertThat(message.getData().getDistractionScore()).isEqualByComparingTo(new BigDecimal("0.86"));
+        assertThat(message.getData().getTriggerTime()).isEqualTo(OffsetDateTime.parse("2026-04-07T10:01:16Z"));
+        assertThat(message.getData().getFleetId()).isEqualTo(1001L);
+        assertThat(message.getData().getVehicleId()).isEqualTo(2001L);
+        assertThat(message.getData().getDriverId()).isEqualTo(3001L);
+        assertThat(message.getData().getLatestActionBy()).isEqualTo(operatorUserId);
+        assertThat(message.getData().getLatestActionTime()).isNotNull();
+        assertThat(message.getData().getRemark()).isEqualTo(expectedRemark);
+    }
+
+    private Long createAlert(String token, String remark) throws Exception {
         HttpHeaders headers = jsonHeaders(token);
-        HttpEntity<String> request = new HttpEntity<>(createAlertPayload(), headers);
+        HttpEntity<String> request = new HttpEntity<>(createAlertPayload(remark), headers);
         ResponseEntity<String> response = restTemplate.postForEntity(
                 url("/api/v1/alerts"),
                 request,
@@ -141,14 +180,27 @@ class RealtimeModuleIntegrationTest {
         return root.path("data").path("id").asLong();
     }
 
-    private void confirmAlert(Long alertId, String token) {
-        HttpHeaders headers = jsonHeaders(token);
-        HttpEntity<String> request = new HttpEntity<>("""
-                {
-                  "remark": "已联系司机"
-                }
-                """, headers);
-        ResponseEntity<String> response = restTemplate.postForEntity(url("/api/v1/alerts/" + alertId + "/confirm"), request, String.class);
+    private void confirmAlert(Long alertId, String token, String remark) {
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                url("/api/v1/alerts/" + alertId + "/confirm"),
+                actionRequest(token, remark),
+                String.class);
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+    }
+
+    private void markFalsePositive(Long alertId, String token, String remark) {
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                url("/api/v1/alerts/" + alertId + "/false-positive"),
+                actionRequest(token, remark),
+                String.class);
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+    }
+
+    private void closeAlert(Long alertId, String token, String remark) {
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                url("/api/v1/alerts/" + alertId + "/close"),
+                actionRequest(token, remark),
+                String.class);
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
     }
 
@@ -176,7 +228,15 @@ class RealtimeModuleIntegrationTest {
         return headers;
     }
 
-    private String createAlertPayload() {
+    private HttpEntity<String> actionRequest(String token, String remark) {
+        return new HttpEntity<>("""
+                {
+                  "remark": "%s"
+                }
+                """.formatted(remark), jsonHeaders(token));
+    }
+
+    private String createAlertPayload(String remark) {
         return """
                 {
                   "fleetId": 1001,
@@ -188,9 +248,9 @@ class RealtimeModuleIntegrationTest {
                   "fatigueScore": 0.91,
                   "distractionScore": 0.86,
                   "triggerTime": "2026-04-07T10:01:16Z",
-                  "remark": "系统自动创建"
+                  "remark": "%s"
                 }
-                """;
+                """.formatted(remark);
     }
 
     private String url(String path) {

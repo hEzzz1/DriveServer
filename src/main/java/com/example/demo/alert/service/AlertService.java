@@ -17,6 +17,7 @@ import com.example.demo.alert.repository.AlertEventRepository;
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
+import com.example.demo.common.trace.TraceIdContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -80,7 +81,7 @@ public class AlertService {
 
         AlertEvent saved = alertEventRepository.save(alert);
         saveActionLog(saved.getId(), AlertActionType.CREATE, operator.getUserId(), now, normalizedRemark);
-        applicationEventPublisher.publishEvent(AlertRealtimeEvent.created(saved));
+        applicationEventPublisher.publishEvent(AlertRealtimeEvent.created(saved, currentTraceId()));
         return toOperationResponse(saved, AlertActionType.CREATE);
     }
 
@@ -190,8 +191,12 @@ public class AlertService {
 
         AlertEvent saved = alertEventRepository.save(alert);
         saveActionLog(saved.getId(), actionType, operator.getUserId(), now, normalizedRemark);
-        applicationEventPublisher.publishEvent(AlertRealtimeEvent.updated(saved, actionType));
+        applicationEventPublisher.publishEvent(AlertRealtimeEvent.updated(saved, currentTraceId()));
         return toOperationResponse(saved, actionType);
+    }
+
+    private String currentTraceId() {
+        return TraceIdContext.getTraceId();
     }
 
     private AlertEvent getAlertOrThrow(Long alertId) {

@@ -31,7 +31,9 @@
 | TC-007 | 趋势查询 | 返回按粒度聚合结果 |
 | TC-008 | 排行查询 | 返回TopN结果并排序正确 |
 | TC-009 | 无权限访问管理接口 | 返回 `40301` |
-| TC-010 | WebSocket推送 | 告警创建时收到消息 |
+| TC-010 | WebSocket推送 | 告警创建时收到标准消息体 |
+| TC-011 | WebSocket状态变更推送 | confirm / false-positive / close 后收到 `ALERT_UPDATED` |
+| TC-012 | 实时刷新联调检查 | 列表局部刷新、详情联动、连接断开重连行为正确 |
 
 ## 5. 性能测试方案
 ### 5.1 上报压测
@@ -81,3 +83,14 @@
 4. 稳定性测试报告。
 5. 缺陷清单与修复闭环记录。
 
+## 9. 实时刷新联调检查清单
+1. 登录成功后可建立 `/ws/alerts` 连接，并订阅 `/topic/alerts`。
+2. 新告警创建后收到 `eventType=ALERT_CREATED` 的标准消息体。
+3. `traceId` 存在，且可用于串联 REST 请求日志与 WebSocket 推送。
+4. `data.alertId/status/riskLevel/riskScore/fatigueScore/distractionScore/triggerTime` 与 REST 详情一致。
+5. `confirm` 后收到 `ALERT_UPDATED`，`data.status=1`。
+6. `false-positive` 后收到 `ALERT_UPDATED`，`data.status=2`。
+7. `close` 后收到 `ALERT_UPDATED`，`data.status=3`。
+8. 列表页只更新受影响数据，不整页 reload，不重置当前分页。
+9. 详情页查看同一 `alertId` 时，只刷新状态、最近操作信息和日志。
+10. 连接断开后可自动重连，失败时页面仍可手动刷新回查 REST。

@@ -1,43 +1,41 @@
 package com.example.demo.realtime.dto;
 
-import java.time.OffsetDateTime;
-
 public class AlertRealtimeMessage {
 
-    private String type;
-    private OffsetDateTime timestamp;
-    private AlertPushPayload payload;
+    private String eventType;
+    private String traceId;
+    private AlertRealtimeData data;
 
     public AlertRealtimeMessage() {
     }
 
-    public AlertRealtimeMessage(String type, OffsetDateTime timestamp, AlertPushPayload payload) {
-        this.type = type;
-        this.timestamp = timestamp;
-        this.payload = payload;
+    public AlertRealtimeMessage(String eventType, String traceId, AlertRealtimeData data) {
+        this.eventType = eventType;
+        this.traceId = traceId;
+        this.data = data;
     }
 
-    public String getType() {
-        return type;
+    public String getEventType() {
+        return eventType;
     }
 
-    public void setType(String type) {
-        this.type = type;
+    public void setEventType(String eventType) {
+        this.eventType = eventType;
     }
 
-    public OffsetDateTime getTimestamp() {
-        return timestamp;
+    public String getTraceId() {
+        return traceId;
     }
 
-    public void setTimestamp(OffsetDateTime timestamp) {
-        this.timestamp = timestamp;
+    public void setTraceId(String traceId) {
+        this.traceId = traceId;
     }
 
-    public AlertPushPayload getPayload() {
-        return payload;
+    public AlertRealtimeData getData() {
+        return data;
     }
 
-    public void setPayload(AlertPushPayload payload) {
-        this.payload = payload;
+    public void setData(AlertRealtimeData data) {
+        this.data = data;
     }
 }

@@ -558,17 +558,23 @@ WebSocket 握手支持两种方式：
 
 ```json
 {
-  "type": "ALERT_CREATED",
-  "timestamp": "2026-04-07T10:01:16Z",
-  "payload": {
+  "eventType": "ALERT_CREATED",
+  "traceId": "trc_20260424_001",
+  "data": {
     "alertId": 1001,
     "alertNo": "ALT202604071001161234",
+    "status": 0,
+    "riskLevel": 3,
+    "riskScore": 0.89,
+    "fatigueScore": 0.91,
+    "distractionScore": 0.86,
+    "triggerTime": "2026-04-07T10:01:16Z",
     "fleetId": 1001,
     "vehicleId": 2001,
     "driverId": 3001,
-    "riskLevel": 3,
-    "status": 0,
-    "actionType": "CREATE"
+    "latestActionBy": 1,
+    "latestActionTime": "2026-04-07T10:01:16Z",
+    "remark": "系统自动创建"
   }
 }
 ```
@@ -576,16 +582,22 @@ WebSocket 握手支持两种方式：
 字段说明：
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `type` | string | `ALERT_CREATED` / `ALERT_UPDATED` |
-| `timestamp` | string | 告警最近动作时间 |
-| `payload.alertId` | long | 告警主键 |
-| `payload.alertNo` | string | 告警编号 |
-| `payload.fleetId` | long | 车队 ID |
-| `payload.vehicleId` | long | 车辆 ID |
-| `payload.driverId` | long | 司机 ID |
-| `payload.riskLevel` | int | 风险等级 |
-| `payload.status` | int | 告警状态 |
-| `payload.actionType` | string | 业务动作 |
+| `eventType` | string | `ALERT_CREATED` / `ALERT_UPDATED` |
+| `traceId` | string | 链路追踪 ID |
+| `data.alertId` | long | 告警主键 |
+| `data.alertNo` | string | 告警编号 |
+| `data.status` | int | 告警状态 |
+| `data.riskLevel` | int | 风险等级 |
+| `data.riskScore` | decimal | 综合风险分 |
+| `data.fatigueScore` | decimal | 疲劳分 |
+| `data.distractionScore` | decimal | 分心分 |
+| `data.triggerTime` | string | 告警触发时间 |
+| `data.fleetId` | long | 车队 ID |
+| `data.vehicleId` | long | 车辆 ID |
+| `data.driverId` | long | 司机 ID |
+| `data.latestActionBy` | long | 最近操作人 |
+| `data.latestActionTime` | string | 最近操作时间 |
+| `data.remark` | string | 当前备注 |
 
 ### 7.5 推送时机
 推送由告警领域事件触发，且在事务提交成功后发送：
