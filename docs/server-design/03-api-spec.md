@@ -9,14 +9,14 @@
 2. 设备事件上报
 3. 告警管理与闭环
 4. WebSocket 告警实时推送
+5. 实时总览接口
+6. 趋势统计接口
+7. 风险排行接口
 
 ### 1.2 尚未落地的能力
 以下内容目前仍属于设计阶段，仓库中暂无对应 Controller / Service 实现：
-1. 实时总览接口 `GET /api/v1/realtime/overview`
-2. 趋势统计接口 `GET /api/v1/stats/trend`
-3. 风险排行接口 `GET /api/v1/stats/ranking`
-4. 规则管理接口 `GET /api/v1/rules`、`POST /api/v1/rules`
-5. 服务器主动向边缘端下发告警/指令接口
+1. 规则管理接口 `GET /api/v1/rules`、`POST /api/v1/rules`
+2. 服务器主动向边缘端下发告警/指令接口
 
 ## 2. 通用约定
 ### 2.1 Base URL
@@ -93,6 +93,9 @@
 | 告警 | `POST` | `/alerts/{id}/false-positive` | `ADMIN` / `OPERATOR` |
 | 告警 | `POST` | `/alerts/{id}/close` | `ADMIN` / `OPERATOR` |
 | 告警 | `GET` | `/alerts/{id}/action-logs` | `ADMIN` / `OPERATOR` / `VIEWER` |
+| 实时总览 | `GET` | `/realtime/overview` | `ADMIN` / `OPERATOR` / `VIEWER` |
+| 统计 | `GET` | `/stats/trend` | `ADMIN` / `OPERATOR` / `VIEWER` |
+| 统计 | `GET` | `/stats/ranking` | `ADMIN` / `OPERATOR` / `VIEWER` |
 
 ### 3.2 WebSocket 接口
 | 模块 | 协议 | 端点 | 订阅主题 | 鉴权 |
@@ -134,6 +137,169 @@
   "traceId": "trc_xxx"
 }
 ```
+
+## 8. 实时总览与统计接口
+### 8.1 实时总览
+- 方法：`GET`
+- 路径：`/api/v1/realtime/overview`
+- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+- 数据源：当前基于 `alert_event` 告警数据近似聚合，不代表严格设备在线态
+
+请求参数：
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `fleetId` | long | 否 | 无 | 按车队过滤 |
+
+成功响应：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "fleetId": 1001,
+    "windowStartTime": "2026-04-25T09:55:00Z",
+    "windowEndTime": "2026-04-25T10:00:00Z",
+    "alertCountLast5Minutes": 12,
+    "highRiskCountLast5Minutes": 5,
+    "handledCountLast5Minutes": 7,
+    "latestAlerts": [
+      {
+        "id": 1001,
+        "alertNo": "ALT202604251000001234",
+        "fleetId": 1001,
+        "vehicleId": 2001,
+        "driverId": 3001,
+        "riskLevel": 3,
+        "status": 0,
+        "riskScore": 0.91,
+        "triggerTime": "2026-04-25T09:59:30Z"
+      }
+    ],
+    "riskDistribution": [
+      {"riskLevel": 1, "count": 2},
+      {"riskLevel": 2, "count": 5},
+      {"riskLevel": 3, "count": 5}
+    ]
+  },
+  "traceId": "trc_xxx"
+}
+```
+
+口径说明：
+1. `windowStartTime/windowEndTime` 为最近 5 分钟窗口，UTC。
+2. `alertCountLast5Minutes` 为窗口内触发告警数。
+3. `highRiskCountLast5Minutes` 为窗口内 `riskLevel=3` 的告警数。
+4. `handledCountLast5Minutes` 为窗口内 `status != 0` 的告警数。
+5. `latestAlerts` 返回最新 5 条告警流，按 `triggerTime desc, id desc` 排序。
+6. `riskDistribution` 当前按最近 5 分钟窗口统计 `riskLevel=1/2/3` 分布。
+
+### 8.2 趋势统计
+- 方法：`GET`
+- 路径：`/api/v1/stats/trend`
+- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+
+请求参数：
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `fleetId` | long | 否 | 无 | 按车队过滤 |
+| `riskLevel` | int | 否 | 无 | 仅支持 `1/2/3` |
+| `status` | int | 否 | 无 | 仅支持 `0/1/2/3` |
+| `startTime` | datetime | 否 | 按粒度回看 | UTC，ISO-8601 |
+| `endTime` | datetime | 否 | 当前时间 | UTC，ISO-8601 |
+| `groupBy` | enum | 否 | `HOUR` | `HOUR` / `DAY` |
+
+默认时间口径：
+1. `groupBy=HOUR` 时，默认返回最近 24 小时。
+2. `groupBy=DAY` 时，默认返回最近 7 天。
+3. `startTime` 不可晚于 `endTime`。
+
+成功响应：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "groupBy": "HOUR",
+    "fleetId": 1001,
+    "riskLevel": null,
+    "status": null,
+    "startTime": "2026-04-24T10:00:00Z",
+    "endTime": "2026-04-25T10:00:00Z",
+    "items": [
+      {
+        "bucketTime": "2026-04-25T09:00:00Z",
+        "alertCount": 6,
+        "highRiskCount": 2,
+        "avgRiskScore": 0.8123,
+        "avgFatigueScore": 0.7011,
+        "avgDistractionScore": 0.4555
+      }
+    ]
+  },
+  "traceId": "trc_xxx"
+}
+```
+
+口径说明：
+1. 当前基于 `alert_event.trigger_time` 聚合。
+2. 返回结果会补齐时间桶，空桶指标为 `0`。
+3. 均值字段保留 4 位小数。
+
+### 8.3 风险排行
+- 方法：`GET`
+- 路径：`/api/v1/stats/ranking`
+- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+
+请求参数：
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| `fleetId` | long | 否 | 无 | 按车队过滤 |
+| `riskLevel` | int | 否 | 无 | 仅支持 `1/2/3` |
+| `status` | int | 否 | 无 | 仅支持 `0/1/2/3` |
+| `startTime` | datetime | 否 | 最近 7 天 | UTC，ISO-8601 |
+| `endTime` | datetime | 否 | 当前时间 | UTC，ISO-8601 |
+| `dimension` | enum | 否 | `DRIVER_ID` | `FLEET_ID` / `VEHICLE_ID` / `DRIVER_ID` / `RULE_ID` |
+| `sortBy` | enum | 否 | `ALERT_COUNT` | `ALERT_COUNT` / `HIGH_RISK_COUNT` / `AVG_RISK_SCORE` |
+| `limit` | int | 否 | `10` | 最大 `100` |
+
+成功响应：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "dimension": "DRIVER_ID",
+    "sortBy": "AVG_RISK_SCORE",
+    "limit": 10,
+    "fleetId": 1001,
+    "riskLevel": null,
+    "status": null,
+    "startTime": "2026-04-18T10:00:00Z",
+    "endTime": "2026-04-25T10:00:00Z",
+    "totalDimensionCount": 3,
+    "items": [
+      {
+        "rank": 1,
+        "dimensionValue": 3001,
+        "alertCount": 8,
+        "highRiskCount": 6,
+        "avgRiskScore": 0.8875,
+        "avgFatigueScore": 0.7444,
+        "avgDistractionScore": 0.5222
+      }
+    ]
+  },
+  "traceId": "trc_xxx"
+}
+```
+
+排序说明：
+1. 主排序按 `sortBy` 对应指标降序。
+2. 同指标值相同时，按 `dimensionValue` 升序稳定排序。
+3. `totalDimensionCount` 为过滤后参与排行的维度总数，`items` 为截断后的 TopN。
 
 响应字段：
 | 字段 | 类型 | 说明 |

@@ -4,6 +4,7 @@
 1. WebSocket 连接与订阅
 2. 告警创建/更新实时推送
 3. 握手鉴权约定
+4. 实时总览接口
 
 ## 1. 模块能力
 实现位置：`src/main/java/com/example/demo/realtime`
@@ -15,6 +16,7 @@
 4. 标准消息体：`eventType + traceId + data`
 5. 告警事务提交后推送（`AFTER_COMMIT`）
 6. 握手支持 JWT（请求头 `Authorization` 或查询参数 `token`）
+7. 总览接口：`GET /api/v1/realtime/overview`
 
 ## 2. 协议说明
 ### 2.1 连接与订阅
@@ -118,3 +120,24 @@ WebSocket 握手沿用现有 JWT 鉴权链路：
 ## 8. 当前边界
 1. 当前使用 Spring Simple Broker（单节点内存广播）。
 2. 多实例横向扩容时，建议接入 Redis Pub/Sub 做跨节点消息同步。
+3. `GET /api/v1/realtime/overview` 当前由 `alert_event` 聚合得到：
+   - 最近 5 分钟指标：告警数据驱动
+   - 最新告警流：告警数据驱动
+   - 风险分布：告警数据驱动
+4. 驾驶员在线数、活跃车辆数、设备心跳等严格实时状态目前尚无独立数据源，不应将总览页口径等同于实时在线监控。
+
+## 9. 总览接口说明
+- 路径：`GET /api/v1/realtime/overview`
+- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+- 可选参数：`fleetId`
+
+返回能力：
+1. 最近 5 分钟告警数
+2. 最近 5 分钟高风险告警数
+3. 最近 5 分钟已处理告警数
+4. 最新 5 条告警流
+5. 最近 5 分钟风险等级分布
+
+说明：
+1. 当前总览页是“告警数据驱动”的近实时视图。
+2. 如果前端需要严格实时在线状态，应在后续接入设备心跳或时序指标数据源后单独扩展接口。
