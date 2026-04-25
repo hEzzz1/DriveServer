@@ -36,7 +36,7 @@ public class RuleConfig {
     @Column(name = "cooldown_seconds", nullable = false)
     private Integer cooldownSeconds;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TINYINT")
     private Boolean enabled;
 
     @Column(nullable = false, length = 32)
