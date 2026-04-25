@@ -17,6 +17,7 @@ import com.example.demo.alert.repository.AlertEventRepository;
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
+import com.example.demo.system.service.SystemAuditService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -46,13 +47,16 @@ public class AlertService {
     private final AlertEventRepository alertEventRepository;
     private final AlertActionLogRepository alertActionLogRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final SystemAuditService systemAuditService;
 
     public AlertService(AlertEventRepository alertEventRepository,
                         AlertActionLogRepository alertActionLogRepository,
-                        ApplicationEventPublisher applicationEventPublisher) {
+                        ApplicationEventPublisher applicationEventPublisher,
+                        SystemAuditService systemAuditService) {
         this.alertEventRepository = alertEventRepository;
         this.alertActionLogRepository = alertActionLogRepository;
         this.applicationEventPublisher = applicationEventPublisher;
+        this.systemAuditService = systemAuditService;
     }
 
     @Transactional
@@ -86,6 +90,12 @@ public class AlertService {
 
         AlertEvent saved = alertEventRepository.save(alert);
         saveActionLog(saved.getId(), AlertActionType.CREATE, operator.getUserId(), now, normalizedRemark);
+        systemAuditService.record(operator, "ALERT", "CREATE_ALERT", "ALERT", saved.getId().toString(), "SUCCESS",
+                normalizedRemark, java.util.Map.of(
+                        "alertId", saved.getId(),
+                        "alertNo", saved.getAlertNo(),
+                        "ruleId", saved.getRuleId(),
+                        "status", saved.getStatus()));
         applicationEventPublisher.publishEvent(AlertRealtimeEvent.created(saved));
         return toOperationResponse(saved, AlertActionType.CREATE);
     }
@@ -196,6 +206,12 @@ public class AlertService {
 
         AlertEvent saved = alertEventRepository.save(alert);
         saveActionLog(saved.getId(), actionType, operator.getUserId(), now, normalizedRemark);
+        systemAuditService.record(operator, "ALERT", actionType.name() + "_ALERT", "ALERT", saved.getId().toString(), "SUCCESS",
+                normalizedRemark, java.util.Map.of(
+                        "alertId", saved.getId(),
+                        "alertNo", saved.getAlertNo(),
+                        "fromStatus", currentStatus == null ? null : currentStatus.name(),
+                        "toStatus", targetStatus.name()));
         applicationEventPublisher.publishEvent(AlertRealtimeEvent.updated(saved, actionType));
         return toOperationResponse(saved, actionType);
     }

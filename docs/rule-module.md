@@ -1,9 +1,10 @@
 # Rule Module 实现文档
 
 本文档说明 `DriveServer` 当前已落地的规则判定能力，重点覆盖：
-1. 风险分计算与源分阈值判定
-2. 状态分累积与衰减
+1. 风险分计算与阈值判定
+2. 规则管理 CRUD、版本历史与回滚
 3. 冷却与分钟桶去重
+4. 规则配置发布后驱动运行时加载
 
 ## 1. 目标范围
 已实现内容：
@@ -18,15 +19,16 @@
 当前未接入内容（后续阶段）：
 1. Redis 持久化冷却键与去重键
 2. 独立 Stream 消费者异步调用规则模块
+3. 规则发布后的缓存失效与热更新优化
 
 ## 2. 核心模型
 核心对象位于 `src/main/java/com/example/demo/rule/model`：
 1. `RuleEvent`：输入事件（`vehicleId`、`eventTime`、`fatigueScore`、`distractionScore`）
-2. `RuleDefinition`：规则配置（风险分、疲劳分、分心分阈值、状态分累积秒数、冷却时长、风险等级）
-3. `RiskStateSnapshot`：当前规则档位下的疲劳状态分与分心状态分
-4. `RiskLevel`：风险等级枚举（`NORMAL/LOW/MID/HIGH`）
-5. `RuleEvaluationResult`：判定结果（是否触发、分值、等级、抑制原因）
-6. `RuleSuppressionReason`：抑制原因枚举
+2. `RuleDefinition`：运行时规则定义（规则 ID、规则码、风险等级、阈值、持续时长、冷却时长、启用状态）
+3. `RiskLevel`：风险等级枚举（`NORMAL/LOW/MID/HIGH`）
+4. `RuleEvaluationResult`：判定结果（是否触发、分值、等级、抑制原因）
+5. `RuleSuppressionReason`：抑制原因枚举
+6. `RuleConfig` / `RuleConfigVersion`：规则管理当前态与版本快照
 
 ## 3. 默认规则
 默认规则由 `RuleDefinition.defaultRiskRules()` 提供：
@@ -84,10 +86,7 @@ risk_score = max(fatigue_score, distraction_score)
 3. 事件间隔越长，旧状态分衰减越明显
 4. 状态分一旦掉下去，不会像旧模型那样瞬间清零，而是逐步回落
 
-当前默认状态分累积秒数：
-1. 高风险：`2s`
-2. 中风险：`3s`
-3. 低风险：`4s`
+运行时仅读取数据库中启用且已发布的规则配置；若没有启用规则，摄取请求仍会接收，但不会创建告警。
 
 ## 5. 去重与冷却策略
 `AlertCooldownDeduplicator` 当前为内存实现：
@@ -100,18 +99,39 @@ risk_score = max(fatigue_score, distraction_score)
 2. `BLOCKED_BY_MINUTE_BUCKET`
 3. `BLOCKED_BY_COOLDOWN`
 
-## 6. 测试覆盖
+## 6. 规则管理
+规则管理接口位于 `/api/v1/rules`，仅 `ADMIN` 可访问：
+1. `GET /api/v1/rules`：规则列表
+2. `GET /api/v1/rules/{id}`：规则详情
+3. `POST /api/v1/rules`：新建草稿
+4. `PUT /api/v1/rules/{id}`：编辑未启用规则，编辑不会直接生效
+5. `POST /api/v1/rules/{id}/publish`：发布并生成版本快照
+6. `POST /api/v1/rules/{id}/toggle`：启停
+7. `GET /api/v1/rules/{id}/versions`：版本历史
+8. `POST /api/v1/rules/{id}/rollback`：回滚到历史版本并生成新版本
+
+状态口径：
+1. `DRAFT`
+2. `PENDING_PUBLISH`
+3. `ENABLED`
+4. `DISABLED`
+5. `ARCHIVED`
+
+规则版本写入到 `rule_config_version`，当前态保留在 `rule_config`。
+同一 `riskLevel` 同时只允许一条规则处于启用状态。
+
+## 7. 测试覆盖
 测试类位于 `src/test/java/com/example/demo/rule`：
 1. `RiskScoreCalculatorTest`
-2. `RiskStateTrackerTest`
-3. `AlertCooldownDeduplicatorTest`
-4. `RuleEngineServiceTest`
+2. `AlertCooldownDeduplicatorTest`
+3. `RuleEngineServiceTest`
+4. `RuleManagementModuleIntegrationTest`
 
 已覆盖场景：
 1. 风险分取较高值与边界值
-2. 状态分累积、衰减与重复高分触发
-3. 分钟桶去重与跨分钟冷却抑制
-4. 触发、抑制、恢复触发的端到端路径
+2. 分钟桶去重与跨分钟冷却抑制
+3. 触发、抑制、恢复触发的端到端路径
+4. 规则管理发布、回滚、审计写入与权限收口
 
 执行命令：
 ```bash

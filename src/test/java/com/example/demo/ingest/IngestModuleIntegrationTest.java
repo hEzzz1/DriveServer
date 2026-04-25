@@ -8,6 +8,8 @@ import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
 import com.example.demo.alert.repository.AlertEventRepository;
+import com.example.demo.rule.entity.RuleConfig;
+import com.example.demo.rule.repository.RuleConfigRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,9 +60,13 @@ class IngestModuleIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private RuleConfigRepository ruleConfigRepository;
+
     @BeforeEach
     void setUp() {
         alertEventRepository.deleteAll();
+        ruleConfigRepository.deleteAll();
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
@@ -68,6 +74,9 @@ class IngestModuleIntegrationTest {
         Role admin = saveRole("ADMIN", "系统管理员");
         UserAccount adminUser = saveUser("admin", "123456", 1);
         bindUserRole(adminUser.getId(), admin.getId());
+        saveRule("RISK_HIGH", "高风险规则", 3, "0.8000", 3, 60, true, "ENABLED");
+        saveRule("RISK_MID", "中风险规则", 2, "0.6500", 5, 60, true, "ENABLED");
+        saveRule("RISK_LOW", "低风险规则", 1, "0.5000", 8, 60, true, "ENABLED");
     }
 
     @Test
@@ -137,7 +146,10 @@ class IngestModuleIntegrationTest {
         assertEquals(1, alerts.size());
 
         AlertEvent alert = alerts.get(0);
-        assertEquals(Long.valueOf(1L), alert.getRuleId());
+        Long highRuleId = ruleConfigRepository.findByRuleCode("RISK_HIGH")
+                .orElseThrow()
+                .getId();
+        assertEquals(highRuleId, alert.getRuleId());
         assertEquals(Byte.valueOf((byte) 3), alert.getRiskLevel());
         assertEquals(0, alert.getRiskScore().compareTo(new BigDecimal("0.7200")));
         assertEquals("HIGH", alert.getEdgeRiskLevel());
@@ -206,6 +218,22 @@ class IngestModuleIntegrationTest {
                         .content(validPayload(eventId + "_2")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(40101));
+    }
+
+    @Test
+    void ingestShouldNotCreateAlertWhenNoRuleEnabled() throws Exception {
+        ruleConfigRepository.deleteAll();
+        String eventId = "evt_no_rules_" + UUID.randomUUID();
+
+        mockMvc.perform(post("/api/v1/events")
+                        .header("X-Device-Token", DEVICE_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validPayload(eventId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.accepted").value(true));
+
+        assertEquals(0, alertEventRepository.count());
     }
 
     private String validPayload(String eventId) {
@@ -282,5 +310,33 @@ class IngestModuleIntegrationTest {
         userRole.setRoleId(roleId);
         userRole.setCreatedAt(LocalDateTime.now());
         userRoleRepository.save(userRole);
+    }
+
+    private RuleConfig saveRule(String ruleCode,
+                                String ruleName,
+                                int riskLevel,
+                                String riskThreshold,
+                                int durationSeconds,
+                                int cooldownSeconds,
+                                boolean enabled,
+                                String status) {
+        RuleConfig rule = new RuleConfig();
+        LocalDateTime now = LocalDateTime.now();
+        rule.setRuleCode(ruleCode);
+        rule.setRuleName(ruleName);
+        rule.setRiskLevel(riskLevel);
+        rule.setRiskThreshold(new BigDecimal(riskThreshold));
+        rule.setDurationSeconds(durationSeconds);
+        rule.setCooldownSeconds(cooldownSeconds);
+        rule.setEnabled(enabled);
+        rule.setStatus(status);
+        rule.setVersion(1);
+        rule.setPublishedAt(enabled ? now : null);
+        rule.setPublishedBy(enabled ? 1L : null);
+        rule.setCreatedBy(1L);
+        rule.setUpdatedBy(1L);
+        rule.setCreatedAt(now);
+        rule.setUpdatedAt(now);
+        return ruleConfigRepository.save(rule);
     }
 }

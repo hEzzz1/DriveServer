@@ -8,6 +8,7 @@ import com.example.demo.rule.model.RuleDefinition;
 import com.example.demo.rule.model.RuleEvaluationResult;
 import com.example.demo.rule.model.RiskLevel;
 import com.example.demo.rule.model.RuleEvent;
+import com.example.demo.rule.service.RuleDefinitionProvider;
 import com.example.demo.rule.service.RuleEngineService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,23 +26,33 @@ import java.util.stream.Collectors;
 public class EventAlertOrchestrator {
 
     private static final Logger log = LoggerFactory.getLogger(EventAlertOrchestrator.class);
-    private static final List<RuleDefinition> DEFAULT_RULES = RuleDefinition.defaultRiskRules();
     private static final AuthenticatedUser SYSTEM_OPERATOR =
             new AuthenticatedUser(1L, "system-auto-alert", List.of("ADMIN"));
 
     private final RuleEngineService ruleEngineService;
     private final AlertService alertService;
+    private final RuleDefinitionProvider ruleDefinitionProvider;
 
-    public EventAlertOrchestrator(RuleEngineService ruleEngineService, AlertService alertService) {
+    public EventAlertOrchestrator(RuleEngineService ruleEngineService,
+                                  AlertService alertService,
+                                  RuleDefinitionProvider ruleDefinitionProvider) {
         this.ruleEngineService = ruleEngineService;
         this.alertService = alertService;
+        this.ruleDefinitionProvider = ruleDefinitionProvider;
     }
 
     public void process(IngestEventRequest request) {
         try {
+            List<RuleDefinition> activeRules = ruleDefinitionProvider.loadEnabledRuleDefinitions();
+            if (activeRules.isEmpty()) {
+                log.info("INGEST_WARNING_SKIPPED eventId={} vehicleId={} reason=no_enabled_rules",
+                        request.getEventId(),
+                        request.getVehicleId());
+                return;
+            }
             CreateAlertRequest createRequest = hasCompleteEdgeWarning(request)
-                    ? toEdgeAlertRequest(request)
-                    : toFallbackAlertRequest(request);
+                    ? toEdgeAlertRequest(request, activeRules)
+                    : toFallbackAlertRequest(request, activeRules);
             alertService.createAlert(createRequest, SYSTEM_OPERATOR);
             log.info("INGEST_WARNING_CREATED eventId={} vehicleId={} ruleId={} riskLevel={} riskScore={} edgeRiskLevel={}",
                     request.getEventId(),
@@ -58,17 +69,17 @@ public class EventAlertOrchestrator {
         }
     }
 
-    private CreateAlertRequest toEdgeAlertRequest(IngestEventRequest request) {
+    private CreateAlertRequest toEdgeAlertRequest(IngestEventRequest request, List<RuleDefinition> activeRules) {
         int riskLevelCode = parseEdgeRiskLevel(request.getRiskLevel());
-        RuleDefinition matchedRule = findRuleByRiskLevelCode(riskLevelCode);
+        RuleDefinition matchedRule = findRuleByRiskLevelCode(activeRules, riskLevelCode);
         return buildCreateAlertRequest(request, matchedRule.getRuleId(), riskLevelCode, maxRiskScore(request));
     }
 
-    private CreateAlertRequest toFallbackAlertRequest(IngestEventRequest request) {
-        RuleEvaluationResult result = ruleEngineService.evaluate(toRuleEvent(request), DEFAULT_RULES);
+    private CreateAlertRequest toFallbackAlertRequest(IngestEventRequest request, List<RuleDefinition> activeRules) {
+        RuleEvaluationResult result = ruleEngineService.evaluate(toRuleEvent(request), activeRules);
         RuleDefinition matchedRule = result.isTriggered()
                 ? Objects.requireNonNull(result.getMatchedRule(), "matched rule is missing for triggered event")
-                : resolveRuleByScore(result.getRiskScore());
+                : resolveRuleByScore(activeRules, result.getRiskScore());
         return buildCreateAlertRequest(
                 request,
                 matchedRule.getRuleId(),
@@ -129,17 +140,17 @@ public class EventAlertOrchestrator {
         };
     }
 
-    private RuleDefinition resolveRuleByScore(BigDecimal riskScore) {
+    private RuleDefinition resolveRuleByScore(List<RuleDefinition> activeRules, BigDecimal riskScore) {
         BigDecimal normalizedScore = scale(riskScore);
-        return DEFAULT_RULES.stream()
+        return activeRules.stream()
                 .sorted(RuleDefinition.BY_RISK_LEVEL_DESC)
                 .filter(rule -> normalizedScore.compareTo(rule.getRiskThreshold()) >= 0)
                 .findFirst()
-                .orElse(findRuleByRiskLevelCode(RiskLevel.LOW.getCode()));
+                .orElseThrow(() -> new IllegalArgumentException("no enabled rule matched current risk score"));
     }
 
-    private RuleDefinition findRuleByRiskLevelCode(int riskLevelCode) {
-        return DEFAULT_RULES.stream()
+    private RuleDefinition findRuleByRiskLevelCode(List<RuleDefinition> activeRules, int riskLevelCode) {
+        return activeRules.stream()
                 .filter(rule -> rule.getRiskLevel().getCode() == riskLevelCode)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("unsupported riskLevel code: " + riskLevelCode));

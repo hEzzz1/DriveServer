@@ -830,3 +830,38 @@ curl -s -X POST 'http://localhost:8080/api/v1/alerts/1001/confirm' \
 2. 当前已支持“服务器向在线管理端实时推送告警”
 3. 当前未提供“服务器主动向边缘端推送告警”的专用下行接口
 4. 若后续需要边缘端下行能力，建议单独设计 MQTT / WebSocket / HTTP callback 方案
+
+## 10. 新增管理接口
+### 10.1 规则管理
+规则管理由 `ADMIN` 独占，当前实现支持规则当前态与版本快照分离：
+1. 当前态保存在 `rule_config`
+2. 历史版本保存在 `rule_config_version`
+3. 每次发布、启停、回滚都会写审计
+4. 回滚会复制历史版本为新版本，不直接修改历史记录
+5. 编辑接口不会直接启用规则；已启用规则需先停用再修改
+6. 同一 `riskLevel` 同时只允许一条规则处于启用状态
+
+接口：
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/api/v1/rules` | 规则列表 |
+| `GET` | `/api/v1/rules/{id}` | 规则详情 |
+| `POST` | `/api/v1/rules` | 新建草稿 |
+| `PUT` | `/api/v1/rules/{id}` | 编辑未启用规则，不直接生效 |
+| `POST` | `/api/v1/rules/{id}/publish` | 发布并生成版本快照 |
+| `POST` | `/api/v1/rules/{id}/toggle` | 启停 |
+| `GET` | `/api/v1/rules/{id}/versions` | 版本历史 |
+| `POST` | `/api/v1/rules/{id}/rollback` | 回滚历史版本并生成新版本 |
+
+### 10.2 系统与审计
+系统管理与审计接口也仅允许 `ADMIN` 访问：
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/api/v1/system/health` | 系统健康概览 |
+| `GET` | `/api/v1/system/services` | 服务状态汇总 |
+| `GET` | `/api/v1/system/version` | 版本信息 |
+| `GET` | `/api/v1/system/monitoring` | 监控摘要 |
+| `GET` | `/api/v1/system/summary` | 系统首页聚合 |
+| `GET` | `/api/v1/audits` | 审计列表 |
+| `GET` | `/api/v1/audits/{id}` | 审计详情 |
+| `GET` | `/api/v1/audits/export` | 审计导出 |
