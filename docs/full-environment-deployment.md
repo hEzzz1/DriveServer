@@ -22,7 +22,10 @@
 7. [`src/main/resources/db/migration/V2__seed_default_data.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V2__seed_default_data.sql)
 8. [`src/main/resources/db/migration/V3__init_auth_rbac.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V3__init_auth_rbac.sql)
 9. [`src/main/resources/db/migration/V4__strengthen_user_rule_alert_audit_schema.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V4__strengthen_user_rule_alert_audit_schema.sql)
-10. [`src/test/resources/application.yaml`](/Users/m1ngyangg/Documents/DriveServer/src/test/resources/application.yaml)
+10. [`src/main/resources/db/migration/V5__rule_versioning_and_audit_governance.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V5__rule_versioning_and_audit_governance.sql)
+11. [`src/main/resources/db/migration/V6__add_edge_metadata_to_alert_event.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V6__add_edge_metadata_to_alert_event.sql)
+12. [`src/main/resources/db/migration/V7__add_explicit_rule_risk_level.sql`](/Users/m1ngyangg/Documents/DriveServer/src/main/resources/db/migration/V7__add_explicit_rule_risk_level.sql)
+13. [`src/test/resources/application.yaml`](/Users/m1ngyangg/Documents/DriveServer/src/test/resources/application.yaml)
 
 ## 3. 软件安装
 建议版本：
@@ -118,7 +121,7 @@ cd /Users/m1ngyangg/Documents/DriveServer
 
 期望日志关键字：
 1. `Started DemoApplication`
-2. `Successfully applied 4 migrations`（首次启动空库时）
+2. `Successfully applied 7 migrations`（首次启动空库时）
 3. `Tomcat started on port 8080`
 4. `HTTP_REQUEST method=... path=... status=... durationMs=... traceId=...`
 
@@ -140,6 +143,9 @@ curl http://localhost:8080/actuator/health
 2. `V2__seed_default_data.sql`：默认管理员与默认规则
 3. `V3__init_auth_rbac.sql`：RBAC 表结构与默认角色初始化
 4. `V4__strengthen_user_rule_alert_audit_schema.sql`：补充外键与检查约束
+5. `V5__rule_versioning_and_audit_governance.sql`：规则版本治理与审计字段增强
+6. `V6__add_edge_metadata_to_alert_event.sql`：告警事件补充 Edge 元数据
+7. `V7__add_explicit_rule_risk_level.sql`：为规则与规则版本补充显式风险等级
 
 默认管理员：
 1. 用户名：`admin`

@@ -26,12 +26,12 @@ CREATE PROCEDURE validate_rule_risk_level_backfill()
 BEGIN
   IF EXISTS (SELECT 1 FROM rule_config WHERE risk_level IS NULL) THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'V6 migration requires manual risk_level backfill for existing rule_config rows';
+      SET MESSAGE_TEXT = 'V7 migration requires manual risk_level backfill for existing rule_config rows';
   END IF;
 
   IF EXISTS (SELECT 1 FROM rule_config_version WHERE risk_level IS NULL) THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'V6 migration requires manual risk_level backfill for existing rule_config_version rows';
+      SET MESSAGE_TEXT = 'V7 migration requires manual risk_level backfill for existing rule_config_version rows';
   END IF;
 END$$
 
