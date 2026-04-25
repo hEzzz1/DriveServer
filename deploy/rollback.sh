@@ -10,6 +10,9 @@ ENV_FILE="${ENV_FILE:-.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-compose.prod.yaml}"
 HEALTH_PATH="${HEALTH_PATH:-/actuator/health}"
 APP_PORT="${APP_PORT:-8080}"
+HEALTH_RETRIES="${HEALTH_RETRIES:-30}"
+HEALTH_INTERVAL_SECONDS="${HEALTH_INTERVAL_SECONDS:-2}"
+HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-5}"
 
 usage() {
   cat <<'EOF'
@@ -27,6 +30,9 @@ Environment variables:
   COMPOSE_FILE=compose.prod.yaml
   HEALTH_PATH=/actuator/health
   APP_PORT=8080
+  HEALTH_RETRIES=30
+  HEALTH_INTERVAL_SECONDS=2
+  HEALTH_TIMEOUT_SECONDS=5
 EOF
 }
 
@@ -70,9 +76,23 @@ compose_up_build() {
 check_http_health() {
   local url="$1"
   require_cmd curl
-  log "Checking health: $url"
-  curl --fail --silent "$url"
-  printf '\n'
+  local attempt=1
+
+  while [[ "$attempt" -le "$HEALTH_RETRIES" ]]; do
+    log "Checking health: $url (attempt ${attempt}/${HEALTH_RETRIES})"
+    if curl --fail --silent --show-error --max-time "$HEALTH_TIMEOUT_SECONDS" "$url" >/dev/null; then
+      log "Health check passed: $url"
+      return 0
+    fi
+
+    if [[ "$attempt" -lt "$HEALTH_RETRIES" ]]; then
+      sleep "$HEALTH_INTERVAL_SECONDS"
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  log "Health check failed after ${HEALTH_RETRIES} attempts: $url"
+  return 1
 }
 
 ensure_clean_worktree() {
@@ -120,7 +140,11 @@ rollback_compose() {
   checkout_ref
   compose_up_build --env-file "$ROOT_DIR/$ENV_FILE" -f "$ROOT_DIR/$COMPOSE_FILE" up -d --build
   run compose_cmd --env-file "$ROOT_DIR/$ENV_FILE" -f "$ROOT_DIR/$COMPOSE_FILE" ps
-  check_http_health "http://127.0.0.1${HEALTH_PATH}"
+  if ! check_http_health "http://127.0.0.1${HEALTH_PATH}"; then
+    run compose_cmd --env-file "$ROOT_DIR/$ENV_FILE" -f "$ROOT_DIR/$COMPOSE_FILE" ps || true
+    run compose_cmd --env-file "$ROOT_DIR/$ENV_FILE" -f "$ROOT_DIR/$COMPOSE_FILE" logs app --tail=200 || true
+    exit 1
+  fi
 }
 
 main() {
