@@ -1,23 +1,23 @@
 # Ingest Module 实现文档
 
-本文档说明 `DriveServer` 当前已落地的事件接入能力，重点覆盖：
+本文档说明 `DriveServer` 当前已落地的边缘警告接入能力，重点覆盖：
 1. `/api/v1/events` 参数校验
 2. 基于 `eventId` 的幂等控制
-3. 自动告警编排
+3. 边缘警告直转与规则兜底编排
 
 ## 1. 目标范围
 已实现内容：
-1. 单条事件接入接口 `POST /api/v1/events`
+1. 单条边缘警告接入接口 `POST /api/v1/events`
 2. 请求体字段校验（必填、长度、分值范围）
 3. 幂等键 `eventId` 去重（默认窗口 24 小时）
 4. 设备鉴权（`X-Device-Token`）
 5. Redis Stream 入流（`XADD stream:events`）
-6. 调用规则模块做风险判定、状态分控制与冷却控制
-7. 命中规则后自动创建告警（`alert_event` / `alert_action_log`）
+6. 边缘上报直转告警（`alert_event` / `alert_action_log`）
+7. 边缘风险字段缺失时，规则引擎兜底计算 `riskScore` / `ruleId`
 8. 统一错误码返回（`40001` / `40002`）
 
 ## 2. 接口说明
-### 2.1 事件上报
+### 2.1 边缘警告上报
 - 方法：`POST`
 - 路径：`/api/v1/events`
 - 鉴权：`X-Device-Token: <device_token>`
@@ -35,9 +35,10 @@
 ```
 
 说明：
-1. `accepted=true` 表示事件已通过鉴权、幂等校验并被系统接收。
-2. 事件接收成功后，会继续进入规则判定链路。
-3. 当状态分达到规则阈值且未命中冷却/去重时，系统会自动创建一条告警。
+1. `accepted=true` 表示边缘警告已通过鉴权、幂等校验并被系统接收。
+2. 接收成功后，系统会立即落一条统一告警记录到 `alert_event`。
+3. 若边缘端提供了 `riskLevel` / `dominantRiskType` / `triggerReasons`，优先按边缘结果落告警。
+4. 若这些字段缺失，则保留原规则引擎作为兜底路径，补算 `riskScore` / `ruleId`。
 
 ## 3. 参数校验规则
 请求 DTO：`IngestEventRequest`
@@ -116,12 +117,12 @@ ingest:
 
 ## 6. 自动告警行为
 `/api/v1/events` 接收成功后，当前实现会继续执行以下步骤：
-1. 将 `vehicleId/eventTime/fatigueScore/distractionScore` 转换为规则输入
-2. 计算 `riskScore`
-3. 按高、中、低风险规则依次累积疲劳状态分和分心状态分
-4. 判定状态分是否达到阈值
-5. 校验分钟桶去重与冷却窗口
-6. 命中后自动创建一条告警，并通过现有告警实时推送链路广播
+1. 完成设备鉴权和 `eventId` 幂等校验
+2. 将原始载荷继续写入事件流，保留现有接入链路
+3. 直接组装 `CreateAlertRequest` 并创建统一告警记录
+4. 若边缘端已提供 `riskLevel` / `dominantRiskType` / `triggerReasons`，则以边缘风险结果为主
+5. 若边缘风险字段不完整，则调用规则引擎兜底计算 `riskScore` / `ruleId`
+6. 告警创建后沿用现有实时推送链路广播
 
 当前 `riskScore` 计算方式为：
 
@@ -130,17 +131,17 @@ risk_score = max(fatigue_score, distraction_score)
 ```
 
 说明：
-1. `riskScore` 用于统一展示与日志输出
-2. 告警触发条件默认按疲劳状态分与分心状态分分别判定，当前口径是“分心更宽松、疲劳更严格”
-3. 规则内部会把原始分数转换成会累积、会衰减的状态分，再比较各档阈值
+1. `riskScore` 继续用于统一展示与日志输出
+2. 边缘直转场景下，`riskLevel` 优先采用边缘结果，`ruleId` 仍映射到现有高/中/低风险规则，便于兼容历史模型
+3. 规则兜底场景下，仍复用原有规则模块的风险计算逻辑
 
 ## 7. 接口与告警关系
 当前 `/api/v1/events` 与 `/api/v1/alerts` 的关系是：
-1. `/api/v1/events` 上报的是边缘端检测事件
-2. 事件先进入服务端规则判定链路
-3. 只有在满足疲劳/分心状态分阈值和冷却条件时，才会自动生成 `/api/v1/alerts` 中的告警记录
-4. 若边缘端仅完成事件上报，但未携带自动建告警所需的业务 ID（如 `fleetId`、`driverId`），服务端仍会接收并透传事件，只跳过自动建告警
-4. 因此 `/alerts` 中的记录不是简单复制 `/events`，而是服务端规则命中后的结果
+1. `/api/v1/events` 是边缘警告上报入口
+2. 接入成功后会立即创建 `/api/v1/alerts` 统一告警记录
+3. `alert_event` 仍然是系统内唯一告警主表，不新增 `warning_event`
+4. 对外可以逐步把文案切到“警告”，对内实体仍保留 `Alert` 命名以降低改动面
+5. 若边缘端未绑定 `fleetId` / `driverId`，当前实现会以 `0` 作为兼容占位值落库，避免丢失告警记录
 
 ## 8. 错误码
 1. `40001`：请求参数不合法
@@ -154,7 +155,8 @@ risk_score = max(fatigue_score, distraction_score)
 2. 分值越界返回 `40001`
 3. 重复 `eventId` 返回 `40002`（HTTP 409）
 4. 缺失或错误 `X-Device-Token` 返回 `40101`
-5. 连续高风险事件推动状态分跨阈值后自动创建告警
+5. 单次上报即创建统一告警记录
+6. 边缘元数据会随 `/api/v1/events` 一并持久化
 
 执行命令：
 ```bash

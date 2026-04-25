@@ -45,6 +45,24 @@ public class AlertEvent {
     @Column(name = "distraction_score", nullable = false, precision = 5, scale = 4)
     private BigDecimal distractionScore;
 
+    @Column(name = "edge_risk_level", length = 32)
+    private String edgeRiskLevel;
+
+    @Column(name = "edge_dominant_risk_type", length = 32)
+    private String edgeDominantRiskType;
+
+    @Column(name = "edge_trigger_reasons", length = 255)
+    private String edgeTriggerReasons;
+
+    @Column(name = "edge_window_start_ms")
+    private Long edgeWindowStartMs;
+
+    @Column(name = "edge_window_end_ms")
+    private Long edgeWindowEndMs;
+
+    @Column(name = "edge_created_at_ms")
+    private Long edgeCreatedAtMs;
+
     @Column(name = "trigger_time", nullable = false)
     private LocalDateTime triggerTime;
 
@@ -144,6 +162,54 @@ public class AlertEvent {
 
     public void setDistractionScore(BigDecimal distractionScore) {
         this.distractionScore = distractionScore;
+    }
+
+    public String getEdgeRiskLevel() {
+        return edgeRiskLevel;
+    }
+
+    public void setEdgeRiskLevel(String edgeRiskLevel) {
+        this.edgeRiskLevel = edgeRiskLevel;
+    }
+
+    public String getEdgeDominantRiskType() {
+        return edgeDominantRiskType;
+    }
+
+    public void setEdgeDominantRiskType(String edgeDominantRiskType) {
+        this.edgeDominantRiskType = edgeDominantRiskType;
+    }
+
+    public String getEdgeTriggerReasons() {
+        return edgeTriggerReasons;
+    }
+
+    public void setEdgeTriggerReasons(String edgeTriggerReasons) {
+        this.edgeTriggerReasons = edgeTriggerReasons;
+    }
+
+    public Long getEdgeWindowStartMs() {
+        return edgeWindowStartMs;
+    }
+
+    public void setEdgeWindowStartMs(Long edgeWindowStartMs) {
+        this.edgeWindowStartMs = edgeWindowStartMs;
+    }
+
+    public Long getEdgeWindowEndMs() {
+        return edgeWindowEndMs;
+    }
+
+    public void setEdgeWindowEndMs(Long edgeWindowEndMs) {
+        this.edgeWindowEndMs = edgeWindowEndMs;
+    }
+
+    public Long getEdgeCreatedAtMs() {
+        return edgeCreatedAtMs;
+    }
+
+    public void setEdgeCreatedAtMs(Long edgeCreatedAtMs) {
+        this.edgeCreatedAtMs = edgeCreatedAtMs;
     }
 
     public LocalDateTime getTriggerTime() {

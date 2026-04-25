@@ -193,7 +193,7 @@ Authorization: Bearer <jwt>
 ```
 
 ## 5. 设备事件接入接口
-### 5.1 单条事件上报
+### 5.1 单条边缘警告上报
 - 方法：`POST`
 - 路径：`/api/v1/events`
 - 鉴权：`X-Device-Token`
@@ -272,13 +272,13 @@ Content-Type: application/json
 3. 未携带或错误设备 Token：`40101`
 
 说明：
-1. 事件写入接入链路后返回 `accepted=true`
-2. 事件接收成功后，会继续进入服务端规则判定链路
-3. 当前 `riskScore` 计算方式为 `max(fatigueScore, distractionScore)`，主要用于统一展示与日志输出
-4. 自动告警默认按疲劳分与分心分分别命中规则阈值，当前口径为“分心更宽松、疲劳更严格”
-5. 只有在满足疲劳/分心状态分阈值且未命中冷却/去重时，才会自动生成 `/alerts` 告警
-6. 边缘端增强字段会被服务端接收并透传到事件流，便于后续扩展实时态和追踪链路
-7. 若缺少自动建告警所需的业务 ID，事件仍会被接收，但会跳过自动建告警
+1. `accepted=true` 表示边缘警告已写入接入链路并被系统接收
+2. 接收成功后，系统会立即创建 `/alerts` 告警记录
+3. 若边缘端提供了 `riskLevel` / `dominantRiskType` / `triggerReasons`，优先按边缘结果落告警
+4. 若这些字段缺失，则调用规则引擎兜底计算 `riskScore` / `ruleId`
+5. 当前 `riskScore` 统一按 `max(fatigueScore, distractionScore)` 口径落库
+6. 边缘端增强字段会同时透传到事件流并写入 `alert_event`，便于实时态和追踪链路复用
+7. 若 `fleetId` / `driverId` 缺失，服务端会以兼容占位值 `0` 落库，避免丢失告警记录
 8. 当前仅支持“边缘端上报到服务器”，不支持服务器主动回推到边缘端
 
 ## 6. 告警管理接口

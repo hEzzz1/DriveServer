@@ -56,14 +56,14 @@ public class IngestService {
 
         boolean acquired = eventIdempotencyStore.tryAcquire(eventId, eventIdTtl);
         if (!acquired) {
-            log.warn("INGEST_EVENT_DUPLICATE eventId={} vehicleId={}", eventId, request.getVehicleId());
+            log.warn("INGEST_WARNING_DUPLICATE eventId={} vehicleId={}", eventId, request.getVehicleId());
             throw new BusinessException(ApiCode.IDEMPOTENT_CONFLICT, ApiCode.IDEMPOTENT_CONFLICT.getMessage());
         }
 
         try {
             eventStreamPublisher.publish(request);
             eventAlertOrchestrator.process(request);
-            log.info("INGEST_EVENT_ACCEPTED eventId={} vehicleId={} fleetId={} driverId={}",
+            log.info("INGEST_WARNING_ACCEPTED eventId={} vehicleId={} fleetId={} driverId={}",
                     request.getEventId(),
                     request.getVehicleId(),
                     request.getFleetId(),
@@ -78,12 +78,12 @@ public class IngestService {
 
     private void validateDeviceToken(String deviceToken) {
         if (!StringUtils.hasText(deviceToken)) {
-            log.warn("INGEST_EVENT_UNAUTHORIZED reason=missing_device_token");
+            log.warn("INGEST_WARNING_UNAUTHORIZED reason=missing_device_token");
             throw new BusinessException(ApiCode.UNAUTHORIZED, INVALID_DEVICE_TOKEN_MSG);
         }
         String normalized = deviceToken.trim();
         if (!allowedDeviceTokens.contains(normalized)) {
-            log.warn("INGEST_EVENT_UNAUTHORIZED reason=invalid_device_token");
+            log.warn("INGEST_WARNING_UNAUTHORIZED reason=invalid_device_token");
             throw new BusinessException(ApiCode.UNAUTHORIZED, INVALID_DEVICE_TOKEN_MSG);
         }
     }

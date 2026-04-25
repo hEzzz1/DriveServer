@@ -150,6 +150,12 @@ CREATE TABLE alert_event (
   risk_score DECIMAL(5,4) NOT NULL,
   fatigue_score DECIMAL(5,4) NOT NULL,
   distraction_score DECIMAL(5,4) NOT NULL,
+  edge_risk_level VARCHAR(32) DEFAULT NULL,
+  edge_dominant_risk_type VARCHAR(32) DEFAULT NULL,
+  edge_trigger_reasons VARCHAR(255) DEFAULT NULL,
+  edge_window_start_ms BIGINT DEFAULT NULL,
+  edge_window_end_ms BIGINT DEFAULT NULL,
+  edge_created_at_ms BIGINT DEFAULT NULL,
   trigger_time DATETIME(3) NOT NULL,
   status TINYINT NOT NULL DEFAULT 0 COMMENT '0新建1确认2误报3关闭',
   latest_action_by BIGINT DEFAULT NULL,
@@ -164,6 +170,11 @@ CREATE TABLE alert_event (
   KEY idx_level_status (risk_level, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
+
+说明：
+1. `alert_event` 同时承担系统内“告警/警告”统一主表职责。
+2. `edge_*` 字段保留边缘端原始风险判断和时间窗元数据。
+3. `rule_id` / `risk_score` 仍保留，用于兼容既有规则、筛选和报表能力。
 
 ### 4.6 告警操作日志
 ```sql

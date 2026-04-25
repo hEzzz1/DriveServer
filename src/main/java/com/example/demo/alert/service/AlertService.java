@@ -70,6 +70,12 @@ public class AlertService {
         alert.setRiskScore(request.getRiskScore());
         alert.setFatigueScore(request.getFatigueScore());
         alert.setDistractionScore(request.getDistractionScore());
+        alert.setEdgeRiskLevel(normalizeOptionalText(request.getEdgeRiskLevel()));
+        alert.setEdgeDominantRiskType(normalizeOptionalText(request.getEdgeDominantRiskType()));
+        alert.setEdgeTriggerReasons(normalizeOptionalText(request.getEdgeTriggerReasons()));
+        alert.setEdgeWindowStartMs(request.getEdgeWindowStartMs());
+        alert.setEdgeWindowEndMs(request.getEdgeWindowEndMs());
+        alert.setEdgeCreatedAtMs(request.getEdgeCreatedAtMs());
         alert.setTriggerTime(LocalDateTime.ofInstant(request.getTriggerTime().toInstant(), ZoneOffset.UTC));
         alert.setStatus(AlertStatus.NEW.getCode());
         alert.setLatestActionBy(operator.getUserId());
@@ -238,10 +244,14 @@ public class AlertService {
     }
 
     private String normalizeRemark(String remark) {
-        if (!StringUtils.hasText(remark)) {
+        return normalizeOptionalText(remark);
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (!StringUtils.hasText(value)) {
             return null;
         }
-        return remark.trim();
+        return value.trim();
     }
 
     private String generateAlertNo(LocalDateTime now) {

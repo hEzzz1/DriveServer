@@ -3,6 +3,7 @@ package com.example.demo.ingest;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.alert.entity.AlertEvent;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
@@ -18,9 +19,13 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -79,27 +84,13 @@ class IngestModuleIntegrationTest {
     }
 
     @Test
-    void ingestShouldAutoCreateAlertAfterRuleDurationReached() throws Exception {
-        String eventIdBase = "evt_auto_alert_" + UUID.randomUUID();
+    void ingestShouldCreateWarningRecordImmediately() throws Exception {
+        String eventId = "evt_warning_" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/events")
                         .header("X-Device-Token", DEVICE_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(payloadWithScores(eventIdBase + "_1", "2026-04-07T10:01:15Z", 0.92, 0.90)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0));
-
-        mockMvc.perform(post("/api/v1/events")
-                        .header("X-Device-Token", DEVICE_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(payloadWithScores(eventIdBase + "_2", "2026-04-07T10:01:17Z", 0.92, 0.90)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0));
-
-        mockMvc.perform(post("/api/v1/events")
-                        .header("X-Device-Token", DEVICE_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(payloadWithScores(eventIdBase + "_3", "2026-04-07T10:01:18Z", 0.92, 0.90)))
+                        .content(payloadWithScores(eventId, "2026-04-07T10:01:15Z", 0.82, 0.64)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
 
@@ -111,7 +102,51 @@ class IngestModuleIntegrationTest {
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.items[0].vehicleId").value(1))
                 .andExpect(jsonPath("$.data.items[0].riskLevel").value(3))
-                .andExpect(jsonPath("$.data.items[0].fatigueScore").value(0.92));
+                .andExpect(jsonPath("$.data.items[0].fatigueScore").value(0.82));
+    }
+
+    @Test
+    void ingestShouldPersistEdgeMetadata() throws Exception {
+        String eventId = "evt_alias_" + UUID.randomUUID();
+
+        mockMvc.perform(post("/api/v1/events")
+                        .header("X-Device-Token", DEVICE_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "eventId": "%s",
+                                  "fleetId": "fleet_01",
+                                  "vehicleId": "veh_001",
+                                  "driverId": "drv_001",
+                                  "eventTime": "2026-04-07T10:01:15Z",
+                                  "fatigueScore": 0.72,
+                                  "distractionScore": 0.68,
+                                  "riskLevel": "HIGH",
+                                  "dominantRiskType": "FATIGUE",
+                                  "triggerReasons": ["EYE_CLOSED", "YAWN"],
+                                  "windowStartMs": 1744010472000,
+                                  "windowEndMs": 1744010475000,
+                                  "createdAtMs": 1744010475200
+                                }
+                                """.formatted(eventId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.accepted").value(true));
+
+        List<AlertEvent> alerts = alertEventRepository.findAll();
+        assertEquals(1, alerts.size());
+
+        AlertEvent alert = alerts.get(0);
+        assertEquals(Long.valueOf(1L), alert.getRuleId());
+        assertEquals(Byte.valueOf((byte) 3), alert.getRiskLevel());
+        assertEquals(0, alert.getRiskScore().compareTo(new BigDecimal("0.7200")));
+        assertEquals("HIGH", alert.getEdgeRiskLevel());
+        assertEquals("FATIGUE", alert.getEdgeDominantRiskType());
+        assertEquals("EYE_CLOSED,YAWN", alert.getEdgeTriggerReasons());
+        assertEquals(Long.valueOf(1744010472000L), alert.getEdgeWindowStartMs());
+        assertEquals(Long.valueOf(1744010475000L), alert.getEdgeWindowEndMs());
+        assertEquals(Long.valueOf(1744010475200L), alert.getEdgeCreatedAtMs());
+        assertNotNull(alert.getCreatedAt());
     }
 
     @Test

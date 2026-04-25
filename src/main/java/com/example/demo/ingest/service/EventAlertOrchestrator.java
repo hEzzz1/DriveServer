@@ -6,15 +6,20 @@ import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.ingest.dto.IngestEventRequest;
 import com.example.demo.rule.model.RuleDefinition;
 import com.example.demo.rule.model.RuleEvaluationResult;
+import com.example.demo.rule.model.RiskLevel;
 import com.example.demo.rule.model.RuleEvent;
 import com.example.demo.rule.service.RuleEngineService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 public class EventAlertOrchestrator {
@@ -33,57 +38,132 @@ public class EventAlertOrchestrator {
     }
 
     public void process(IngestEventRequest request) {
-        RuleEvent ruleEvent = new RuleEvent(
-                request.getVehicleId(),
-                request.getEventTime(),
-                request.getFatigueScore(),
-                request.getDistractionScore()
-        );
-        RuleEvaluationResult result = ruleEngineService.evaluate(ruleEvent, DEFAULT_RULES);
-        if (!result.isTriggered()) {
-            log.info("EVENT_ALERT_SKIPPED eventId={} vehicleId={} reason={} riskScore={}",
-                    request.getEventId(),
-                    request.getVehicleId(),
-                    result.getSuppressionReason(),
-                    result.getRiskScore());
-            return;
-        }
-
         try {
-            CreateAlertRequest createRequest = toCreateAlertRequest(request, result);
+            CreateAlertRequest createRequest = hasCompleteEdgeWarning(request)
+                    ? toEdgeAlertRequest(request)
+                    : toFallbackAlertRequest(request);
             alertService.createAlert(createRequest, SYSTEM_OPERATOR);
-            log.info("EVENT_ALERT_CREATED eventId={} vehicleId={} ruleId={} riskLevel={} riskScore={}",
+            log.info("INGEST_WARNING_CREATED eventId={} vehicleId={} ruleId={} riskLevel={} riskScore={} edgeRiskLevel={}",
                     request.getEventId(),
                     request.getVehicleId(),
                     createRequest.getRuleId(),
                     createRequest.getRiskLevel(),
-                    createRequest.getRiskScore());
+                    createRequest.getRiskScore(),
+                    createRequest.getEdgeRiskLevel());
         } catch (IllegalArgumentException ex) {
-            log.warn("EVENT_ALERT_SKIPPED eventId={} vehicleId={} reason={}",
+            log.warn("INGEST_WARNING_SKIPPED eventId={} vehicleId={} reason={}",
                     request.getEventId(),
                     request.getVehicleId(),
                     ex.getMessage());
         }
     }
 
-    private CreateAlertRequest toCreateAlertRequest(IngestEventRequest request, RuleEvaluationResult result) {
-        RuleDefinition matchedRule = result.getMatchedRule();
-        if (matchedRule == null) {
-            throw new IllegalArgumentException("matched rule is missing for triggered event");
-        }
+    private CreateAlertRequest toEdgeAlertRequest(IngestEventRequest request) {
+        int riskLevelCode = parseEdgeRiskLevel(request.getRiskLevel());
+        RuleDefinition matchedRule = findRuleByRiskLevelCode(riskLevelCode);
+        return buildCreateAlertRequest(request, matchedRule.getRuleId(), riskLevelCode, maxRiskScore(request));
+    }
 
+    private CreateAlertRequest toFallbackAlertRequest(IngestEventRequest request) {
+        RuleEvaluationResult result = ruleEngineService.evaluate(toRuleEvent(request), DEFAULT_RULES);
+        RuleDefinition matchedRule = result.isTriggered()
+                ? Objects.requireNonNull(result.getMatchedRule(), "matched rule is missing for triggered event")
+                : resolveRuleByScore(result.getRiskScore());
+        return buildCreateAlertRequest(
+                request,
+                matchedRule.getRuleId(),
+                matchedRule.getRiskLevel().getCode(),
+                result.getRiskScore());
+    }
+
+    private CreateAlertRequest buildCreateAlertRequest(IngestEventRequest request,
+                                                       Long ruleId,
+                                                       Integer riskLevel,
+                                                       BigDecimal riskScore) {
         CreateAlertRequest createRequest = new CreateAlertRequest();
-        createRequest.setFleetId(parseBusinessId(request.getFleetId(), "fleetId"));
+        createRequest.setFleetId(parseOptionalBusinessId(request.getFleetId()));
         createRequest.setVehicleId(parseBusinessId(request.getVehicleId(), "vehicleId"));
-        createRequest.setDriverId(parseBusinessId(request.getDriverId(), "driverId"));
-        createRequest.setRuleId(matchedRule.getRuleId());
-        createRequest.setRiskLevel(result.getRiskLevel().getCode());
-        createRequest.setRiskScore(scale(result.getRiskScore()));
+        createRequest.setDriverId(parseOptionalBusinessId(request.getDriverId()));
+        createRequest.setRuleId(ruleId);
+        createRequest.setRiskLevel(riskLevel);
+        createRequest.setRiskScore(scale(riskScore));
         createRequest.setFatigueScore(scale(request.getFatigueScore()));
         createRequest.setDistractionScore(scale(request.getDistractionScore()));
+        createRequest.setEdgeRiskLevel(normalizeOptionalText(request.getRiskLevel()));
+        createRequest.setEdgeDominantRiskType(normalizeOptionalText(request.getDominantRiskType()));
+        createRequest.setEdgeTriggerReasons(joinTriggerReasons(request.getTriggerReasons()));
+        createRequest.setEdgeWindowStartMs(request.getWindowStartMs());
+        createRequest.setEdgeWindowEndMs(request.getWindowEndMs());
+        createRequest.setEdgeCreatedAtMs(request.getCreatedAtMs());
         createRequest.setTriggerTime(request.getEventTime());
-        createRequest.setRemark("Auto created from event " + request.getEventId());
+        createRequest.setRemark("Warning accepted from event " + request.getEventId());
         return createRequest;
+    }
+
+    private RuleEvent toRuleEvent(IngestEventRequest request) {
+        return new RuleEvent(
+                request.getVehicleId(),
+                request.getEventTime(),
+                request.getFatigueScore(),
+                request.getDistractionScore()
+        );
+    }
+
+    private boolean hasCompleteEdgeWarning(IngestEventRequest request) {
+        return StringUtils.hasText(request.getRiskLevel())
+                && StringUtils.hasText(request.getDominantRiskType())
+                && request.getTriggerReasons() != null
+                && !request.getTriggerReasons().isEmpty();
+    }
+
+    private int parseEdgeRiskLevel(String rawRiskLevel) {
+        String normalized = normalizeOptionalText(rawRiskLevel);
+        if (normalized == null) {
+            throw new IllegalArgumentException("edge riskLevel is missing");
+        }
+        return switch (normalized.toUpperCase(Locale.ROOT)) {
+            case "HIGH", "H", "3" -> RiskLevel.HIGH.getCode();
+            case "MID", "MEDIUM", "M", "2" -> RiskLevel.MID.getCode();
+            case "LOW", "L", "1" -> RiskLevel.LOW.getCode();
+            default -> throw new IllegalArgumentException("unsupported edge riskLevel: " + rawRiskLevel);
+        };
+    }
+
+    private RuleDefinition resolveRuleByScore(BigDecimal riskScore) {
+        BigDecimal normalizedScore = scale(riskScore);
+        return DEFAULT_RULES.stream()
+                .sorted(RuleDefinition.BY_RISK_LEVEL_DESC)
+                .filter(rule -> normalizedScore.compareTo(rule.getRiskThreshold()) >= 0)
+                .findFirst()
+                .orElse(findRuleByRiskLevelCode(RiskLevel.LOW.getCode()));
+    }
+
+    private RuleDefinition findRuleByRiskLevelCode(int riskLevelCode) {
+        return DEFAULT_RULES.stream()
+                .filter(rule -> rule.getRiskLevel().getCode() == riskLevelCode)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("unsupported riskLevel code: " + riskLevelCode));
+    }
+
+    private BigDecimal maxRiskScore(IngestEventRequest request) {
+        return request.getFatigueScore().max(request.getDistractionScore());
+    }
+
+    private String joinTriggerReasons(List<String> triggerReasons) {
+        if (triggerReasons == null || triggerReasons.isEmpty()) {
+            return null;
+        }
+        return triggerReasons.stream()
+                .map(this::normalizeOptionalText)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining(","));
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
     }
 
     private BigDecimal scale(BigDecimal value) {
@@ -117,5 +197,12 @@ public class EventAlertOrchestrator {
         }
 
         return Long.parseLong(trimmed.substring(start, end));
+    }
+
+    private Long parseOptionalBusinessId(String rawValue) {
+        if (!StringUtils.hasText(rawValue)) {
+            return 0L;
+        }
+        return parseBusinessId(rawValue, "optionalBusinessId");
     }
 }
