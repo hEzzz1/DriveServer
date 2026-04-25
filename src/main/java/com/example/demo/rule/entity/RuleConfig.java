@@ -24,7 +24,7 @@ public class RuleConfig {
     @Column(name = "rule_name", nullable = false, length = 128)
     private String ruleName;
 
-    @Column(name = "risk_level", nullable = false)
+    @Column(name = "risk_level", nullable = false, columnDefinition = "TINYINT")
     private Integer riskLevel;
 
     @Column(name = "risk_threshold", nullable = false, precision = 5, scale = 4)
