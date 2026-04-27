@@ -1,9 +1,11 @@
 package com.example.demo.user.controller;
 
-import com.example.demo.auth.security.SuperAdminOnly;
+import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.auth.security.EnterpriseAdminOrSuperAdmin;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.user.dto.RoleItemData;
 import com.example.demo.user.service.UserManagementService;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,8 +23,8 @@ public class RoleController {
     }
 
     @GetMapping
-    @SuperAdminOnly
-    public ApiResponse<List<RoleItemData>> listRoles() {
-        return ApiResponse.success(userManagementService.listRoles());
+    @EnterpriseAdminOrSuperAdmin
+    public ApiResponse<List<RoleItemData>> listRoles(Authentication authentication) {
+        return ApiResponse.success(userManagementService.listRoles((AuthenticatedUser) authentication.getPrincipal()));
     }
 }

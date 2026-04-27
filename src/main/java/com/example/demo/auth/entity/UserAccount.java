@@ -29,6 +29,9 @@ public class UserAccount {
     @Column(name = "subject_type", nullable = false, length = 16)
     private String subjectType;
 
+    @Column(name = "enterprise_id")
+    private Long enterpriseId;
+
     @Column(nullable = false)
     private Byte status;
 
@@ -72,6 +75,14 @@ public class UserAccount {
 
     public void setSubjectType(String subjectType) {
         this.subjectType = subjectType;
+    }
+
+    public Long getEnterpriseId() {
+        return enterpriseId;
+    }
+
+    public void setEnterpriseId(Long enterpriseId) {
+        this.enterpriseId = enterpriseId;
     }
 
     public void setNickname(String nickname) {

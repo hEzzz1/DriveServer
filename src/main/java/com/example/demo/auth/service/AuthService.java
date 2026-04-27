@@ -6,10 +6,14 @@ import com.example.demo.auth.model.RoleCode;
 import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
+import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.auth.security.JwtTokenResult;
 import com.example.demo.auth.security.JwtTokenService;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
+import com.example.demo.enterprise.entity.Enterprise;
+import com.example.demo.enterprise.repository.EnterpriseRepository;
+import com.example.demo.auth.dto.CurrentUserResponseData;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -21,15 +25,18 @@ public class AuthService {
 
     private final UserAccountRepository userAccountRepository;
     private final RoleRepository roleRepository;
+    private final EnterpriseRepository enterpriseRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
 
     public AuthService(UserAccountRepository userAccountRepository,
                        RoleRepository roleRepository,
+                       EnterpriseRepository enterpriseRepository,
                        PasswordEncoder passwordEncoder,
                        JwtTokenService jwtTokenService) {
         this.userAccountRepository = userAccountRepository;
         this.roleRepository = roleRepository;
+        this.enterpriseRepository = enterpriseRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
     }
@@ -58,5 +65,20 @@ public class AuthService {
 
         JwtTokenResult tokenResult = jwtTokenService.issueToken(user.getId(), user.getUsername(), roles);
         return new LoginResponseData(tokenResult.token(), tokenResult.expireAt(), roles);
+    }
+
+    public CurrentUserResponseData getCurrentUser(AuthenticatedUser authenticatedUser) {
+        UserAccount user = userAccountRepository.findById(authenticatedUser.getUserId())
+                .orElseThrow(() -> new BusinessException(ApiCode.UNAUTHORIZED, ApiCode.UNAUTHORIZED.getMessage()));
+        Enterprise enterprise = user.getEnterpriseId() == null ? null : enterpriseRepository.findById(user.getEnterpriseId()).orElse(null);
+        return new CurrentUserResponseData(
+                user.getId(),
+                user.getUsername(),
+                user.getNickname(),
+                authenticatedUser.getRoles(),
+                user.getEnterpriseId(),
+                enterprise == null ? null : enterprise.getName(),
+                user.getSubjectType(),
+                user.getStatus() != null && user.getStatus() == (byte) 1);
     }
 }

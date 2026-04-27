@@ -8,6 +8,7 @@ import java.util.Optional;
 
 public enum RoleCode {
     SUPER_ADMIN,
+    ENTERPRISE_ADMIN,
     SYS_ADMIN,
     RISK_ADMIN,
     OPERATOR,

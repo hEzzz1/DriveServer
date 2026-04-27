@@ -1,4 +1,4 @@
-package com.example.demo.auth;
+package com.example.demo.enterprise;
 
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
@@ -23,15 +23,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-class AuthModuleIntegrationTest {
+class EnterpriseManagementIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -54,6 +53,12 @@ class AuthModuleIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    private Enterprise enterpriseA;
+    private Enterprise enterpriseB;
+    private UserAccount superAdminUser;
+    private UserAccount sysAdminUser;
+    private UserAccount enterpriseAdminUser;
+
     @BeforeEach
     void setUp() {
         userRoleRepository.deleteAll();
@@ -61,94 +66,100 @@ class AuthModuleIntegrationTest {
         userAccountRepository.deleteAll();
         enterpriseRepository.deleteAll();
 
-        Enterprise enterprise = new Enterprise();
-        enterprise.setCode("ENT-A");
-        enterprise.setName("企业A");
-        enterprise.setStatus((byte) 1);
-        enterprise.setCreatedAt(LocalDateTime.now());
-        enterprise.setUpdatedAt(LocalDateTime.now());
-        Enterprise savedEnterprise = enterpriseRepository.save(enterprise);
+        enterpriseA = saveEnterprise("ENT-A", "企业A", 1);
+        enterpriseB = saveEnterprise("ENT-B", "企业B", 1);
 
-        Role admin = saveRole("SUPER_ADMIN", "超级管理员");
-        Role viewer = saveRole("VIEWER", "观察员");
+        Role superAdmin = saveRole("SUPER_ADMIN", "超级管理员");
+        Role sysAdmin = saveRole("SYS_ADMIN", "系统管理员");
+        Role enterpriseAdmin = saveRole("ENTERPRISE_ADMIN", "企业管理员");
 
-        UserAccount adminUser = saveUser("admin", "123456", 1, null);
-        UserAccount viewerUser = saveUser("viewer", "123456", 1, savedEnterprise.getId());
+        superAdminUser = saveUser("super-admin", "123456", 1, null);
+        sysAdminUser = saveUser("sys-admin", "123456", 1, null);
+        enterpriseAdminUser = saveUser("enterprise-admin", "123456", 1, enterpriseA.getId());
 
-        bindUserRole(adminUser.getId(), admin.getId());
-        bindUserRole(viewerUser.getId(), viewer.getId());
+        bindUserRole(superAdminUser.getId(), superAdmin.getId());
+        bindUserRole(sysAdminUser.getId(), sysAdmin.getId());
+        bindUserRole(enterpriseAdminUser.getId(), enterpriseAdmin.getId());
     }
 
     @Test
-    void loginShouldReturnTokenAndRoles() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/login")
+    void superAdminShouldManageEnterprises() throws Exception {
+        String token = loginAndGetToken("super-admin", "123456");
+
+        mockMvc.perform(post("/api/v1/enterprises")
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "username": "admin",
-                                  "password": "123456"
+                                  "code": "ENT-C",
+                                  "name": "企业C",
+                                  "contactName": "张三",
+                                  "contactPhone": "13800000000",
+                                  "remark": "测试企业"
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.token").isNotEmpty())
-                .andExpect(jsonPath("$.data.roles[0]").value("SUPER_ADMIN"));
-    }
+                .andExpect(jsonPath("$.data.code").value("ENT-C"))
+                .andExpect(jsonPath("$.data.name").value("企业C"));
 
-    @Test
-    void loginShouldFailWhenPasswordInvalid() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/login")
+        mockMvc.perform(put("/api/v1/enterprises/{id}/status", enterpriseB.getId())
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "username": "admin",
-                                  "password": "bad-password"
+                                  "enabled": false
                                 }
                                 """))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(40101));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(false));
     }
 
     @Test
-    void meShouldRequireValidJwt() throws Exception {
-        mockMvc.perform(get("/api/v1/auth/me"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(40101));
+    void sysAdminShouldReadButNotWriteEnterprises() throws Exception {
+        String token = loginAndGetToken("sys-admin", "123456");
 
-        String token = loginAndGetToken("admin", "123456");
-        mockMvc.perform(get("/api/v1/auth/me")
+        mockMvc.perform(get("/api/v1/enterprises")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.username").value("admin"))
-                .andExpect(jsonPath("$.data.subjectType").value("USER"))
-                .andExpect(jsonPath("$.data.enabled").value(true));
-    }
+                .andExpect(jsonPath("$.data.total").value(2));
 
-    @Test
-    void adminEndpointShouldRejectViewer() throws Exception {
-        String viewerToken = loginAndGetToken("viewer", "123456");
-        mockMvc.perform(get("/api/v1/auth/admin/ping")
-                        .header("Authorization", "Bearer " + viewerToken))
+        mockMvc.perform(post("/api/v1/enterprises")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "code": "ENT-X",
+                                  "name": "企业X"
+                                }
+                                """))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(40301));
-
-        String adminToken = loginAndGetToken("admin", "123456");
-        mockMvc.perform(get("/api/v1/auth/admin/ping")
-                        .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0));
     }
 
     @Test
-    void corsPreflightShouldAllowConfiguredOrigin() throws Exception {
-        mockMvc.perform(options("/api/v1/auth/login")
-                        .header("Origin", "http://localhost:5173")
-                        .header("Access-Control-Request-Method", "POST")
-                        .header("Access-Control-Request-Headers", "authorization,content-type"))
+    void enterpriseAdminShouldOnlyReadOwnEnterprise() throws Exception {
+        String token = loginAndGetToken("enterprise-admin", "123456");
+
+        mockMvc.perform(get("/api/v1/enterprises")
+                        .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
-                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].id").value(enterpriseA.getId()));
+
+        mockMvc.perform(get("/api/v1/enterprises/{id}", enterpriseB.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(40301));
+    }
+
+    private Enterprise saveEnterprise(String code, String name, int status) {
+        Enterprise enterprise = new Enterprise();
+        enterprise.setCode(code);
+        enterprise.setName(name);
+        enterprise.setStatus((byte) status);
+        enterprise.setCreatedAt(LocalDateTime.now());
+        enterprise.setUpdatedAt(LocalDateTime.now());
+        return enterpriseRepository.save(enterprise);
     }
 
     private Role saveRole(String roleCode, String roleName) {

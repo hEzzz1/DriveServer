@@ -37,7 +37,7 @@ public class AuthController {
     @AnyReadRole
     public ApiResponse<CurrentUserResponseData> currentUser(Authentication authentication) {
         AuthenticatedUser current = (AuthenticatedUser) authentication.getPrincipal();
-        return ApiResponse.success(new CurrentUserResponseData(current.getUserId(), current.getUsername(), current.getRoles()));
+        return ApiResponse.success(authService.getCurrentUser(current));
     }
 
     @GetMapping("/admin/ping")

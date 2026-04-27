@@ -1,5 +1,8 @@
 package com.example.demo.auth.security;
 
+import com.example.demo.auth.entity.UserAccount;
+import com.example.demo.auth.model.SubjectType;
+import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.api.ApiResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,10 +28,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtTokenService jwtTokenService;
+    private final UserAccountRepository userAccountRepository;
     private final ObjectMapper objectMapper;
 
-    public JwtAuthenticationFilter(JwtTokenService jwtTokenService, ObjectMapper objectMapper) {
+    public JwtAuthenticationFilter(JwtTokenService jwtTokenService,
+                                   UserAccountRepository userAccountRepository,
+                                   ObjectMapper objectMapper) {
         this.jwtTokenService = jwtTokenService;
+        this.userAccountRepository = userAccountRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -58,6 +65,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             AuthenticatedUser user = jwtTokenService.parseToken(token);
+            validateCurrentUser(user);
             UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
                     user,
                     null,
@@ -71,6 +79,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     request.getRequestURI(),
                     ex.getClass().getSimpleName());
             writeUnauthorized(response);
+        }
+    }
+
+    private void validateCurrentUser(AuthenticatedUser authenticatedUser) {
+        UserAccount user = userAccountRepository.findById(authenticatedUser.getUserId())
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        if (!SubjectType.USER.name().equals(user.getSubjectType())) {
+            throw new IllegalArgumentException("Unsupported subject type");
+        }
+        if (user.getStatus() == null || user.getStatus() == (byte) 0) {
+            throw new IllegalArgumentException("User disabled");
         }
     }
 
