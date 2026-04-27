@@ -30,7 +30,7 @@
 相关 Flyway 脚本：
 1. `V3__init_auth_rbac.sql`
 2. `V4__strengthen_user_rule_alert_audit_schema.sql`
-3. `V8__expand_rbac_and_add_internal_subjects.sql`
+3. `V9__expand_rbac_and_add_internal_subjects.sql`
 
 主要变更：
 1. 创建 `role` 表
