@@ -71,12 +71,15 @@ class AuthModuleIntegrationTest {
 
         Role admin = saveRole("SUPER_ADMIN", "超级管理员");
         Role viewer = saveRole("VIEWER", "观察员");
+        Role enterpriseAdmin = saveRole("ENTERPRISE_ADMIN", "企业管理员");
 
         UserAccount adminUser = saveUser("admin", "123456", 1, null);
         UserAccount viewerUser = saveUser("viewer", "123456", 1, savedEnterprise.getId());
+        UserAccount enterpriseAdminUser = saveUser("enterprise-admin", "123456", 1, savedEnterprise.getId());
 
         bindUserRole(adminUser.getId(), admin.getId());
         bindUserRole(viewerUser.getId(), viewer.getId());
+        bindUserRole(enterpriseAdminUser.getId(), enterpriseAdmin.getId());
     }
 
     @Test
@@ -123,6 +126,17 @@ class AuthModuleIntegrationTest {
                 .andExpect(jsonPath("$.data.username").value("admin"))
                 .andExpect(jsonPath("$.data.subjectType").value("USER"))
                 .andExpect(jsonPath("$.data.enabled").value(true));
+    }
+
+    @Test
+    void meShouldAllowEnterpriseAdmin() throws Exception {
+        String token = loginAndGetToken("enterprise-admin", "123456");
+        mockMvc.perform(get("/api/v1/auth/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.username").value("enterprise-admin"))
+                .andExpect(jsonPath("$.data.roles[0]").value("ENTERPRISE_ADMIN"));
     }
 
     @Test
