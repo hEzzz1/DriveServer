@@ -10,7 +10,9 @@ public class CorsProperties {
 
     private List<String> allowedOriginPatterns = new ArrayList<>(List.of(
             "http://localhost:5173",
-            "http://localhost:4173"
+            "http://localhost:4173",
+            "http://172.20.10.4:4173",
+            "http://172.20.10.4:5173"
     ));
     private List<String> allowedMethods = new ArrayList<>(List.of(
             "GET",
