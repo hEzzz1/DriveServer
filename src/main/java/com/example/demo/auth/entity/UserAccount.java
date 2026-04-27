@@ -26,6 +26,9 @@ public class UserAccount {
     @Column(length = 64)
     private String nickname;
 
+    @Column(name = "subject_type", nullable = false, length = 16)
+    private String subjectType;
+
     @Column(nullable = false)
     private Byte status;
 
@@ -61,6 +64,14 @@ public class UserAccount {
 
     public String getNickname() {
         return nickname;
+    }
+
+    public String getSubjectType() {
+        return subjectType;
+    }
+
+    public void setSubjectType(String subjectType) {
+        this.subjectType = subjectType;
     }
 
     public void setNickname(String nickname) {

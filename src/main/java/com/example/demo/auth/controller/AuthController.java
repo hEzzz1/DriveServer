@@ -3,9 +3,9 @@ package com.example.demo.auth.controller;
 import com.example.demo.auth.dto.CurrentUserResponseData;
 import com.example.demo.auth.dto.LoginRequest;
 import com.example.demo.auth.dto.LoginResponseData;
-import com.example.demo.auth.security.AdminOnly;
-import com.example.demo.auth.security.AnyUserRole;
+import com.example.demo.auth.security.AnyReadRole;
 import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.auth.security.SystemAdminOrSuperAdmin;
 import com.example.demo.auth.service.AuthService;
 import com.example.demo.common.api.ApiResponse;
 import jakarta.validation.Valid;
@@ -34,14 +34,14 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    @AnyUserRole
+    @AnyReadRole
     public ApiResponse<CurrentUserResponseData> currentUser(Authentication authentication) {
         AuthenticatedUser current = (AuthenticatedUser) authentication.getPrincipal();
         return ApiResponse.success(new CurrentUserResponseData(current.getUserId(), current.getUsername(), current.getRoles()));
     }
 
     @GetMapping("/admin/ping")
-    @AdminOnly
+    @SystemAdminOrSuperAdmin
     public ApiResponse<Map<String, String>> adminPing() {
         return ApiResponse.success(Map.of("message", "admin-ok"));
     }

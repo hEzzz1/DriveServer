@@ -8,15 +8,16 @@
 1. 认证与鉴权
 2. 设备事件上报
 3. 告警管理与闭环
-4. WebSocket 告警实时推送
-5. 实时总览接口
-6. 趋势统计接口
-7. 风险排行接口
+4. 规则管理
+5. WebSocket 告警实时推送
+6. 实时总览接口
+7. 趋势统计接口
+8. 风险排行接口
+9. 用户与角色管理
 
 ### 1.2 尚未落地的能力
 以下内容目前仍属于设计阶段，仓库中暂无对应 Controller / Service 实现：
-1. 规则管理接口 `GET /api/v1/rules`、`POST /api/v1/rules`
-2. 服务器主动向边缘端下发告警/指令接口
+1. 服务器主动向边缘端下发告警/指令接口
 
 ## 2. 通用约定
 ### 2.1 Base URL
@@ -69,14 +70,20 @@
 
 ### 2.6 角色说明
 系统内置角色：
-1. `ADMIN`
-2. `OPERATOR`
-3. `VIEWER`
+1. `SUPER_ADMIN`
+2. `SYS_ADMIN`
+3. `RISK_ADMIN`
+4. `OPERATOR`
+5. `ANALYST`
+6. `VIEWER`
 
 权限范围：
-1. `ADMIN`：管理类能力
-2. `OPERATOR`：业务操作类能力
-3. `VIEWER`：只读查询类能力
+1. `SUPER_ADMIN`：用户与角色管理，且可访问全部管理接口
+2. `SYS_ADMIN`：系统健康、服务状态、版本、监控、审计
+3. `RISK_ADMIN`：规则管理
+4. `OPERATOR`：告警处置与告警查询
+5. `ANALYST`：告警查询与统计分析
+6. `VIEWER`：只读查询
 
 ## 3. 接口总览
 ### 3.1 REST 接口
@@ -84,18 +91,31 @@
 |---|---|---|---|
 | 认证 | `POST` | `/auth/login` | 匿名 |
 | 认证 | `GET` | `/auth/me` | 任意登录角色 |
-| 认证 | `GET` | `/auth/admin/ping` | `ADMIN` |
+| 认证 | `GET` | `/auth/admin/ping` | `SYS_ADMIN` / `SUPER_ADMIN` |
 | 事件接入 | `POST` | `/events` | 设备 Token |
-| 告警 | `POST` | `/alerts` | `ADMIN` / `OPERATOR` |
-| 告警 | `GET` | `/alerts` | `ADMIN` / `OPERATOR` / `VIEWER` |
-| 告警 | `GET` | `/alerts/{id}` | `ADMIN` / `OPERATOR` / `VIEWER` |
-| 告警 | `POST` | `/alerts/{id}/confirm` | `ADMIN` / `OPERATOR` |
-| 告警 | `POST` | `/alerts/{id}/false-positive` | `ADMIN` / `OPERATOR` |
-| 告警 | `POST` | `/alerts/{id}/close` | `ADMIN` / `OPERATOR` |
-| 告警 | `GET` | `/alerts/{id}/action-logs` | `ADMIN` / `OPERATOR` / `VIEWER` |
-| 实时总览 | `GET` | `/realtime/overview` | `ADMIN` / `OPERATOR` / `VIEWER` |
-| 统计 | `GET` | `/stats/trend` | `ADMIN` / `OPERATOR` / `VIEWER` |
-| 统计 | `GET` | `/stats/ranking` | `ADMIN` / `OPERATOR` / `VIEWER` |
+| 告警 | `POST` | `/alerts` | `OPERATOR` / `SUPER_ADMIN` |
+| 告警 | `GET` | `/alerts` | `OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN` |
+| 告警 | `GET` | `/alerts/{id}` | `OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN` |
+| 告警 | `POST` | `/alerts/{id}/confirm` | `OPERATOR` / `SUPER_ADMIN` |
+| 告警 | `POST` | `/alerts/{id}/false-positive` | `OPERATOR` / `SUPER_ADMIN` |
+| 告警 | `POST` | `/alerts/{id}/close` | `OPERATOR` / `SUPER_ADMIN` |
+| 告警 | `GET` | `/alerts/{id}/action-logs` | `OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN` |
+| 实时总览 | `GET` | `/realtime/overview` | `OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN` |
+| 统计 | `GET` | `/stats/trend` | `OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN` |
+| 统计 | `GET` | `/stats/ranking` | `OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN` |
+| 规则 | `GET` | `/rules` | `RISK_ADMIN` / `SUPER_ADMIN` |
+| 规则 | `GET` | `/rules/{id}` | `RISK_ADMIN` / `SUPER_ADMIN` |
+| 规则 | `POST` | `/rules` | `RISK_ADMIN` / `SUPER_ADMIN` |
+| 规则 | `PUT` | `/rules/{id}` | `RISK_ADMIN` / `SUPER_ADMIN` |
+| 规则 | `POST` | `/rules/{id}/publish` | `RISK_ADMIN` / `SUPER_ADMIN` |
+| 规则 | `POST` | `/rules/{id}/toggle` | `RISK_ADMIN` / `SUPER_ADMIN` |
+| 规则 | `GET` | `/rules/{id}/versions` | `RISK_ADMIN` / `SUPER_ADMIN` |
+| 规则 | `POST` | `/rules/{id}/rollback` | `RISK_ADMIN` / `SUPER_ADMIN` |
+| 用户 | `GET` | `/users` | `SUPER_ADMIN` |
+| 用户 | `GET` | `/users/{id}` | `SUPER_ADMIN` |
+| 用户 | `PUT` | `/users/{id}/roles` | `SUPER_ADMIN` |
+| 用户 | `PUT` | `/users/{id}/status` | `SUPER_ADMIN` |
+| 角色 | `GET` | `/roles` | `SUPER_ADMIN` |
 
 ### 3.2 WebSocket 接口
 | 模块 | 协议 | 端点 | 订阅主题 | 鉴权 |
@@ -132,7 +152,7 @@
   "data": {
     "token": "<jwt>",
     "expireAt": "2026-04-07T12:00:00Z",
-    "roles": ["ADMIN"]
+    "roles": ["SUPER_ADMIN"]
   },
   "traceId": "trc_xxx"
 }
@@ -142,7 +162,7 @@
 ### 8.1 实时总览
 - 方法：`GET`
 - 路径：`/api/v1/realtime/overview`
-- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+- 鉴权：`OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN`
 - 数据源：当前基于 `alert_event` 告警数据近似聚合，不代表严格设备在线态
 
 请求参数：
@@ -197,7 +217,7 @@
 ### 8.2 趋势统计
 - 方法：`GET`
 - 路径：`/api/v1/stats/trend`
-- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+- 鉴权：`OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN`
 
 请求参数：
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
@@ -250,7 +270,7 @@
 ### 8.3 风险排行
 - 方法：`GET`
 - 路径：`/api/v1/stats/ranking`
-- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+- 鉴权：`OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN`
 
 请求参数：
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
@@ -317,7 +337,7 @@
 ### 4.2 当前用户信息
 - 方法：`GET`
 - 路径：`/api/v1/auth/me`
-- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+- 鉴权：`OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN`
 
 请求头：
 
@@ -334,7 +354,7 @@ Authorization: Bearer <jwt>
   "data": {
     "userId": 1,
     "username": "admin",
-    "roles": ["ADMIN"]
+    "roles": ["SUPER_ADMIN"]
   },
   "traceId": "trc_xxx"
 }
@@ -343,7 +363,7 @@ Authorization: Bearer <jwt>
 ### 4.3 管理员连通性检查
 - 方法：`GET`
 - 路径：`/api/v1/auth/admin/ping`
-- 鉴权：`ADMIN`
+- 鉴权：`SYS_ADMIN` / `SUPER_ADMIN`
 
 成功响应：
 
@@ -451,7 +471,7 @@ Content-Type: application/json
 ### 6.1 创建告警
 - 方法：`POST`
 - 路径：`/api/v1/alerts`
-- 鉴权：`ADMIN` / `OPERATOR`
+- 鉴权：`OPERATOR` / `SUPER_ADMIN`
 
 请求体：
 
@@ -505,7 +525,7 @@ Content-Type: application/json
 ### 6.2 告警分页查询
 - 方法：`GET`
 - 路径：`/api/v1/alerts`
-- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+- 鉴权：`OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN`
 
 查询参数：
 | 参数 | 类型 | 必填 | 说明 |
@@ -556,7 +576,7 @@ Content-Type: application/json
 ### 6.3 告警详情
 - 方法：`GET`
 - 路径：`/api/v1/alerts/{id}`
-- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+- 鉴权：`OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN`
 
 成功响应：
 
@@ -591,7 +611,7 @@ Content-Type: application/json
 ### 6.4 告警确认
 - 方法：`POST`
 - 路径：`/api/v1/alerts/{id}/confirm`
-- 鉴权：`ADMIN` / `OPERATOR`
+- 鉴权：`OPERATOR` / `SUPER_ADMIN`
 
 请求体：
 
@@ -616,7 +636,7 @@ Content-Type: application/json
 ### 6.5 告警误报标注
 - 方法：`POST`
 - 路径：`/api/v1/alerts/{id}/false-positive`
-- 鉴权：`ADMIN` / `OPERATOR`
+- 鉴权：`OPERATOR` / `SUPER_ADMIN`
 
 请求体：
 
@@ -633,7 +653,7 @@ Content-Type: application/json
 ### 6.6 告警关闭
 - 方法：`POST`
 - 路径：`/api/v1/alerts/{id}/close`
-- 鉴权：`ADMIN` / `OPERATOR`
+- 鉴权：`OPERATOR` / `SUPER_ADMIN`
 
 请求体：
 
@@ -650,7 +670,7 @@ Content-Type: application/json
 ### 6.7 告警操作日志
 - 方法：`GET`
 - 路径：`/api/v1/alerts/{id}/action-logs`
-- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+- 鉴权：`OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN`
 
 成功响应：
 
@@ -833,7 +853,7 @@ curl -s -X POST 'http://localhost:8080/api/v1/alerts/1001/confirm' \
 
 ## 10. 新增管理接口
 ### 10.1 规则管理
-规则管理由 `ADMIN` 独占，当前实现支持规则当前态与版本快照分离：
+规则管理由 `RISK_ADMIN` / `SUPER_ADMIN` 负责，当前实现支持规则当前态与版本快照分离：
 1. 当前态保存在 `rule_config`
 2. 历史版本保存在 `rule_config_version`
 3. 每次发布、启停、回滚都会写审计
@@ -854,7 +874,7 @@ curl -s -X POST 'http://localhost:8080/api/v1/alerts/1001/confirm' \
 | `POST` | `/api/v1/rules/{id}/rollback` | 回滚历史版本并生成新版本 |
 
 ### 10.2 系统与审计
-系统管理与审计接口也仅允许 `ADMIN` 访问：
+系统管理与审计接口仅允许 `SYS_ADMIN` / `SUPER_ADMIN` 访问：
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | `GET` | `/api/v1/system/health` | 系统健康概览 |
@@ -865,3 +885,13 @@ curl -s -X POST 'http://localhost:8080/api/v1/alerts/1001/confirm' \
 | `GET` | `/api/v1/audits` | 审计列表 |
 | `GET` | `/api/v1/audits/{id}` | 审计详情 |
 | `GET` | `/api/v1/audits/export` | 审计导出 |
+
+### 10.3 用户与角色管理
+用户与角色管理仅允许 `SUPER_ADMIN` 访问：
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/api/v1/users` | 用户列表，支持关键字与启用状态过滤 |
+| `GET` | `/api/v1/users/{id}` | 用户详情 |
+| `PUT` | `/api/v1/users/{id}/roles` | 分配角色 |
+| `PUT` | `/api/v1/users/{id}/status` | 启用或禁用用户 |
+| `GET` | `/api/v1/roles` | 角色列表 |

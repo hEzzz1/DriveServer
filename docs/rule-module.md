@@ -100,7 +100,7 @@ risk_score = max(fatigue_score, distraction_score)
 3. `BLOCKED_BY_COOLDOWN`
 
 ## 6. 规则管理
-规则管理接口位于 `/api/v1/rules`，仅 `ADMIN` 可访问：
+规则管理接口位于 `/api/v1/rules`，仅 `RISK_ADMIN` / `SUPER_ADMIN` 可访问：
 1. `GET /api/v1/rules`：规则列表
 2. `GET /api/v1/rules/{id}`：规则详情
 3. `POST /api/v1/rules`：新建草稿

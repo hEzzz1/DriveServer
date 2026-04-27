@@ -1,5 +1,7 @@
 package com.example.demo.auth.security;
 
+import com.example.demo.auth.model.RoleCode;
+import com.example.demo.auth.model.SubjectType;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
@@ -10,12 +12,18 @@ public class AuthenticatedUser {
 
     private final Long userId;
     private final String username;
+    private final SubjectType subjectType;
     private final List<String> roles;
 
     public AuthenticatedUser(Long userId, String username, List<String> roles) {
+        this(userId, username, SubjectType.USER, roles);
+    }
+
+    public AuthenticatedUser(Long userId, String username, SubjectType subjectType, List<String> roles) {
         this.userId = userId;
         this.username = username;
-        this.roles = roles;
+        this.subjectType = subjectType == null ? SubjectType.USER : subjectType;
+        this.roles = RoleCode.normalizeAll(roles);
     }
 
     public Long getUserId() {
@@ -24,6 +32,10 @@ public class AuthenticatedUser {
 
     public String getUsername() {
         return username;
+    }
+
+    public SubjectType getSubjectType() {
+        return subjectType;
     }
 
     public List<String> getRoles() {

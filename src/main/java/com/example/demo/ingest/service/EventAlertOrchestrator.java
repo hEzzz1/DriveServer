@@ -2,7 +2,12 @@ package com.example.demo.ingest.service;
 
 import com.example.demo.alert.dto.CreateAlertRequest;
 import com.example.demo.alert.service.AlertService;
+import com.example.demo.auth.entity.UserAccount;
+import com.example.demo.auth.model.SubjectType;
+import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.common.api.ApiCode;
+import com.example.demo.common.exception.BusinessException;
 import com.example.demo.ingest.dto.IngestEventRequest;
 import com.example.demo.rule.model.RuleDefinition;
 import com.example.demo.rule.model.RuleEvaluationResult;
@@ -26,19 +31,21 @@ import java.util.stream.Collectors;
 public class EventAlertOrchestrator {
 
     private static final Logger log = LoggerFactory.getLogger(EventAlertOrchestrator.class);
-    private static final AuthenticatedUser SYSTEM_OPERATOR =
-            new AuthenticatedUser(1L, "system-auto-alert", List.of("ADMIN"));
+    private static final String SYSTEM_OPERATOR_USERNAME = "system-auto-alert";
 
     private final RuleEngineService ruleEngineService;
     private final AlertService alertService;
     private final RuleDefinitionProvider ruleDefinitionProvider;
+    private final UserAccountRepository userAccountRepository;
 
     public EventAlertOrchestrator(RuleEngineService ruleEngineService,
                                   AlertService alertService,
-                                  RuleDefinitionProvider ruleDefinitionProvider) {
+                                  RuleDefinitionProvider ruleDefinitionProvider,
+                                  UserAccountRepository userAccountRepository) {
         this.ruleEngineService = ruleEngineService;
         this.alertService = alertService;
         this.ruleDefinitionProvider = ruleDefinitionProvider;
+        this.userAccountRepository = userAccountRepository;
     }
 
     public void process(IngestEventRequest request) {
@@ -53,7 +60,7 @@ public class EventAlertOrchestrator {
             CreateAlertRequest createRequest = hasCompleteEdgeWarning(request)
                     ? toEdgeAlertRequest(request, activeRules)
                     : toFallbackAlertRequest(request, activeRules);
-            alertService.createAlert(createRequest, SYSTEM_OPERATOR);
+            alertService.createAlert(createRequest, systemOperator());
             log.info("INGEST_WARNING_CREATED eventId={} vehicleId={} ruleId={} riskLevel={} riskScore={} edgeRiskLevel={}",
                     request.getEventId(),
                     request.getVehicleId(),
@@ -215,5 +222,12 @@ public class EventAlertOrchestrator {
             return 0L;
         }
         return parseBusinessId(rawValue, "optionalBusinessId");
+    }
+
+    private AuthenticatedUser systemOperator() {
+        UserAccount account = userAccountRepository
+                .findByUsernameAndSubjectType(SYSTEM_OPERATOR_USERNAME, SubjectType.SYSTEM.name())
+                .orElseThrow(() -> new BusinessException(ApiCode.INTERNAL_ERROR, "系统内部账号未初始化"));
+        return new AuthenticatedUser(account.getId(), account.getUsername(), SubjectType.SYSTEM, List.of());
     }
 }

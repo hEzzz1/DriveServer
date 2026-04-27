@@ -2,6 +2,8 @@ package com.example.demo.auth.service;
 
 import com.example.demo.auth.dto.LoginResponseData;
 import com.example.demo.auth.entity.UserAccount;
+import com.example.demo.auth.model.RoleCode;
+import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.security.JwtTokenResult;
@@ -38,7 +40,7 @@ public class AuthService {
             throw new BusinessException(ApiCode.INVALID_PARAM, ApiCode.INVALID_PARAM.getMessage());
         }
 
-        UserAccount user = userAccountRepository.findByUsername(normalizedUsername)
+        UserAccount user = userAccountRepository.findByUsernameAndSubjectType(normalizedUsername, SubjectType.USER.name())
                 .orElseThrow(() -> new BusinessException(ApiCode.UNAUTHORIZED, "用户名或密码错误"));
 
         if (user.getStatus() == null || user.getStatus() == (byte) 0) {
@@ -49,7 +51,7 @@ public class AuthService {
             throw new BusinessException(ApiCode.UNAUTHORIZED, "用户名或密码错误");
         }
 
-        List<String> roles = roleRepository.findRoleCodesByUserId(user.getId()).stream().distinct().sorted().toList();
+        List<String> roles = RoleCode.normalizeAll(roleRepository.findRoleCodesByUserId(user.getId()));
         if (roles.isEmpty()) {
             throw new BusinessException(ApiCode.FORBIDDEN, "账号未分配角色");
         }

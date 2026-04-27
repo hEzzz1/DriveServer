@@ -1,6 +1,6 @@
 package com.example.demo.stats.controller;
 
-import com.example.demo.auth.security.AnyUserRole;
+import com.example.demo.auth.security.AnyReadRole;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.stats.dto.RankingResponseData;
 import com.example.demo.stats.dto.TrendResponseData;
@@ -27,7 +27,7 @@ public class StatsController {
     }
 
     @GetMapping("/trend")
-    @AnyUserRole
+    @AnyReadRole
     public ApiResponse<TrendResponseData> trend(@RequestParam(required = false) Long fleetId,
                                                 @RequestParam(required = false) Integer riskLevel,
                                                 @RequestParam(required = false) Integer status,
@@ -38,7 +38,7 @@ public class StatsController {
     }
 
     @GetMapping("/ranking")
-    @AnyUserRole
+    @AnyReadRole
     public ApiResponse<RankingResponseData> ranking(@RequestParam(required = false) Long fleetId,
                                                     @RequestParam(required = false) Integer riskLevel,
                                                     @RequestParam(required = false) Integer status,

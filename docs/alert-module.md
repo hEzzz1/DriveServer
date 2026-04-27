@@ -11,11 +11,11 @@
 实现位置：`src/main/java/com/example/demo/alert`
 
 已实现接口：
-1. `POST /api/v1/alerts`：创建告警（`ADMIN`/`OPERATOR`）
-2. `POST /api/v1/alerts/{id}/confirm`：确认告警（`ADMIN`/`OPERATOR`）
-3. `POST /api/v1/alerts/{id}/false-positive`：标注误报（`ADMIN`/`OPERATOR`）
-4. `POST /api/v1/alerts/{id}/close`：关闭告警（`ADMIN`/`OPERATOR`）
-5. `GET /api/v1/alerts/{id}/action-logs`：查询操作日志（`ADMIN`/`OPERATOR`/`VIEWER`）
+1. `POST /api/v1/alerts`：创建告警（`OPERATOR`/`SUPER_ADMIN`）
+2. `POST /api/v1/alerts/{id}/confirm`：确认告警（`OPERATOR`/`SUPER_ADMIN`）
+3. `POST /api/v1/alerts/{id}/false-positive`：标注误报（`OPERATOR`/`SUPER_ADMIN`）
+4. `POST /api/v1/alerts/{id}/close`：关闭告警（`OPERATOR`/`SUPER_ADMIN`）
+5. `GET /api/v1/alerts/{id}/action-logs`：查询操作日志（`OPERATOR`/`ANALYST`/`VIEWER`/`RISK_ADMIN`/`SYS_ADMIN`/`SUPER_ADMIN`）
 
 统一响应：`ApiResponse`
 

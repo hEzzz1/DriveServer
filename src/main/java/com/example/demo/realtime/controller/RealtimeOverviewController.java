@@ -1,6 +1,6 @@
 package com.example.demo.realtime.controller;
 
-import com.example.demo.auth.security.AnyUserRole;
+import com.example.demo.auth.security.AnyReadRole;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.stats.dto.StatsOverviewResponseData;
 import com.example.demo.stats.service.StatsService;
@@ -20,7 +20,7 @@ public class RealtimeOverviewController {
     }
 
     @GetMapping("/overview")
-    @AnyUserRole
+    @AnyReadRole
     public ApiResponse<StatsOverviewResponseData> overview(@RequestParam(required = false) Long fleetId) {
         return ApiResponse.success(statsService.getRealtimeOverview(fleetId));
     }

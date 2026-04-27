@@ -1,7 +1,7 @@
 package com.example.demo.system.controller;
 
-import com.example.demo.auth.security.AdminOnly;
 import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.auth.security.SystemAdminOrSuperAdmin;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.system.dto.SystemAuditDetailData;
 import com.example.demo.system.dto.SystemAuditExportResponseData;
@@ -36,37 +36,37 @@ public class SystemController {
     }
 
     @GetMapping("/system/health")
-    @AdminOnly
+    @SystemAdminOrSuperAdmin
     public ApiResponse<SystemHealthResponseData> health() {
         return ApiResponse.success(systemManagementService.getHealth());
     }
 
     @GetMapping("/system/services")
-    @AdminOnly
+    @SystemAdminOrSuperAdmin
     public ApiResponse<SystemServicesResponseData> services() {
         return ApiResponse.success(systemManagementService.getServices());
     }
 
     @GetMapping("/system/version")
-    @AdminOnly
+    @SystemAdminOrSuperAdmin
     public ApiResponse<SystemVersionResponseData> version() {
         return ApiResponse.success(systemManagementService.getVersion());
     }
 
     @GetMapping("/system/monitoring")
-    @AdminOnly
+    @SystemAdminOrSuperAdmin
     public ApiResponse<SystemMonitoringResponseData> monitoring() {
         return ApiResponse.success(systemManagementService.getMonitoring());
     }
 
     @GetMapping("/system/summary")
-    @AdminOnly
+    @SystemAdminOrSuperAdmin
     public ApiResponse<SystemSummaryResponseData> summary() {
         return ApiResponse.success(systemManagementService.getSummary());
     }
 
     @GetMapping("/audits")
-    @AdminOnly
+    @SystemAdminOrSuperAdmin
     public ApiResponse<SystemAuditPageResponseData> audits(@RequestParam(required = false) String module,
                                                            @RequestParam(required = false) String actionType,
                                                            @RequestParam(required = false) String targetType,
@@ -80,13 +80,13 @@ public class SystemController {
     }
 
     @GetMapping("/audits/{id}")
-    @AdminOnly
+    @SystemAdminOrSuperAdmin
     public ApiResponse<SystemAuditDetailData> auditDetail(@PathVariable Long id) {
         return ApiResponse.success(systemAuditService.getDetail(id));
     }
 
     @GetMapping("/audits/export")
-    @AdminOnly
+    @SystemAdminOrSuperAdmin
     public ApiResponse<SystemAuditExportResponseData> exportAudits(@RequestParam(required = false) String module,
                                                                    @RequestParam(required = false) String actionType,
                                                                    @RequestParam(required = false) String targetType,

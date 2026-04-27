@@ -1,7 +1,7 @@
 package com.example.demo.rule.controller;
 
-import com.example.demo.auth.security.AdminOnly;
 import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.auth.security.RiskAdminOrSuperAdmin;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.rule.dto.RuleConfigDetailData;
 import com.example.demo.rule.dto.RuleConfigPageResponseData;
@@ -35,7 +35,7 @@ public class RuleController {
     }
 
     @GetMapping
-    @AdminOnly
+    @RiskAdminOrSuperAdmin
     public ApiResponse<RuleConfigPageResponseData> list(@RequestParam(required = false) Integer page,
                                                         @RequestParam(required = false) Integer size,
                                                         @RequestParam(required = false) String status,
@@ -45,20 +45,20 @@ public class RuleController {
     }
 
     @GetMapping("/{id}")
-    @AdminOnly
+    @RiskAdminOrSuperAdmin
     public ApiResponse<RuleConfigDetailData> detail(@PathVariable Long id) {
         return ApiResponse.success(ruleConfigService.getRule(id));
     }
 
     @PostMapping
-    @AdminOnly
+    @RiskAdminOrSuperAdmin
     public ApiResponse<RuleOperationResponseData> create(@Valid @RequestBody RuleUpsertRequest request,
                                                          Authentication authentication) {
         return ApiResponse.success(ruleConfigService.createRule(request, currentUser(authentication)));
     }
 
     @PutMapping("/{id}")
-    @AdminOnly
+    @RiskAdminOrSuperAdmin
     public ApiResponse<RuleOperationResponseData> update(@PathVariable Long id,
                                                          @Valid @RequestBody RuleUpsertRequest request,
                                                          Authentication authentication) {
@@ -66,7 +66,7 @@ public class RuleController {
     }
 
     @PostMapping("/{id}/publish")
-    @AdminOnly
+    @RiskAdminOrSuperAdmin
     public ApiResponse<RuleOperationResponseData> publish(@PathVariable Long id,
                                                           @Valid @RequestBody(required = false) RulePublishRequest request,
                                                           Authentication authentication) {
@@ -75,20 +75,20 @@ public class RuleController {
     }
 
     @PostMapping("/{id}/toggle")
-    @AdminOnly
+    @RiskAdminOrSuperAdmin
     public ApiResponse<RuleOperationResponseData> toggle(@PathVariable Long id,
                                                          Authentication authentication) {
         return ApiResponse.success(ruleConfigService.toggleRule(id, currentUser(authentication)));
     }
 
     @GetMapping("/{id}/versions")
-    @AdminOnly
+    @RiskAdminOrSuperAdmin
     public ApiResponse<List<RuleConfigVersionItemData>> versions(@PathVariable Long id) {
         return ApiResponse.success(ruleConfigService.listVersions(id));
     }
 
     @PostMapping("/{id}/rollback")
-    @AdminOnly
+    @RiskAdminOrSuperAdmin
     public ApiResponse<RuleOperationResponseData> rollback(@PathVariable Long id,
                                                            @Valid @RequestBody RuleRollbackRequest request,
                                                            Authentication authentication) {
@@ -99,4 +99,3 @@ public class RuleController {
         return (AuthenticatedUser) authentication.getPrincipal();
     }
 }
-

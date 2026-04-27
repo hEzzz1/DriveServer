@@ -7,8 +7,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Target({ElementType.TYPE, ElementType.METHOD})
+@Target({ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
-@PreAuthorize("hasAnyRole('ADMIN','OPERATOR','VIEWER')")
-public @interface AnyUserRole {
+@PreAuthorize("hasAnyRole('OPERATOR','SUPER_ADMIN')")
+public @interface OperatorOrSuperAdmin {
 }

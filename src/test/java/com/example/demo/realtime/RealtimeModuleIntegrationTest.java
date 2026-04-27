@@ -3,6 +3,7 @@ package com.example.demo.realtime;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
@@ -211,6 +212,7 @@ class RealtimeModuleIntegrationTest {
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setNickname(username);
+        user.setSubjectType(SubjectType.USER.name());
         user.setStatus((byte) status);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());

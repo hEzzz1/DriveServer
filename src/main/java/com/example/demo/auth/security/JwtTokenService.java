@@ -1,5 +1,7 @@
 package com.example.demo.auth.security;
 
+import com.example.demo.auth.model.RoleCode;
+import com.example.demo.auth.model.SubjectType;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.JwtException;
@@ -11,10 +13,8 @@ import org.springframework.util.StringUtils;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Objects;
 
 @Service
 public class JwtTokenService {
@@ -41,12 +41,7 @@ public class JwtTokenService {
     public JwtTokenResult issueToken(Long userId, String username, List<String> roles) {
         Instant now = Instant.now();
         Instant expireAt = now.plusSeconds(jwtProperties.getExpireSeconds());
-        List<String> normalizedRoles = roles == null ? List.of() : roles.stream()
-                .filter(StringUtils::hasText)
-                .map(String::trim)
-                .map(String::toUpperCase)
-                .distinct()
-                .toList();
+        List<String> normalizedRoles = RoleCode.normalizeAll(roles);
 
         String token = Jwts.builder()
                 .subject(username)
@@ -54,6 +49,7 @@ public class JwtTokenService {
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expireAt))
                 .claim("uid", userId)
+                .claim("subjectType", SubjectType.USER.name())
                 .claim("roles", normalizedRoles)
                 .signWith(signingKey)
                 .compact();
@@ -70,8 +66,9 @@ public class JwtTokenService {
 
         Long userId = toLong(claims.get("uid"));
         String username = claims.getSubject();
+        SubjectType subjectType = SubjectType.from((String) claims.get("subjectType"));
         List<String> roles = toRoles(claims.get("roles"));
-        return new AuthenticatedUser(userId, username, roles);
+        return new AuthenticatedUser(userId, username, subjectType, roles);
     }
 
     private Long toLong(Object value) {
@@ -88,12 +85,9 @@ public class JwtTokenService {
         if (!(value instanceof List<?> list)) {
             return List.of();
         }
-        List<String> roles = new ArrayList<>();
-        for (Object obj : list) {
-            if (obj instanceof String role && StringUtils.hasText(role)) {
-                roles.add(role.trim().toUpperCase());
-            }
-        }
-        return roles.stream().filter(Objects::nonNull).distinct().toList();
+        return RoleCode.normalizeAll(list.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .toList());
     }
 }

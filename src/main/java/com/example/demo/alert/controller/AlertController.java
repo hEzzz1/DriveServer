@@ -7,9 +7,9 @@ import com.example.demo.alert.dto.AlertOperationResponseData;
 import com.example.demo.alert.dto.AlertPageResponseData;
 import com.example.demo.alert.dto.CreateAlertRequest;
 import com.example.demo.alert.service.AlertService;
-import com.example.demo.auth.security.AdminOrOperator;
-import com.example.demo.auth.security.AnyUserRole;
+import com.example.demo.auth.security.AnyReadRole;
 import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.auth.security.OperatorOrSuperAdmin;
 import com.example.demo.common.api.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -35,14 +35,14 @@ public class AlertController {
     }
 
     @PostMapping
-    @AdminOrOperator
+    @OperatorOrSuperAdmin
     public ApiResponse<AlertOperationResponseData> createAlert(@Valid @RequestBody CreateAlertRequest request,
                                                                Authentication authentication) {
         return ApiResponse.success(alertService.createAlert(request, currentUser(authentication)));
     }
 
     @GetMapping
-    @AnyUserRole
+    @AnyReadRole
     public ApiResponse<AlertPageResponseData> listAlerts(@RequestParam(required = false) Integer page,
                                                          @RequestParam(required = false) Integer size,
                                                          @RequestParam(required = false) Long fleetId,
@@ -57,13 +57,13 @@ public class AlertController {
     }
 
     @GetMapping("/{id}")
-    @AnyUserRole
+    @AnyReadRole
     public ApiResponse<AlertDetailResponseData> detail(@PathVariable Long id) {
         return ApiResponse.success(alertService.getAlertDetail(id));
     }
 
     @PostMapping("/{id}/confirm")
-    @AdminOrOperator
+    @OperatorOrSuperAdmin
     public ApiResponse<AlertOperationResponseData> confirmAlert(@PathVariable Long id,
                                                                 @Valid @RequestBody AlertActionRequest request,
                                                                 Authentication authentication) {
@@ -71,7 +71,7 @@ public class AlertController {
     }
 
     @PostMapping("/{id}/false-positive")
-    @AdminOrOperator
+    @OperatorOrSuperAdmin
     public ApiResponse<AlertOperationResponseData> falsePositive(@PathVariable Long id,
                                                                  @Valid @RequestBody AlertActionRequest request,
                                                                  Authentication authentication) {
@@ -79,7 +79,7 @@ public class AlertController {
     }
 
     @PostMapping("/{id}/close")
-    @AdminOrOperator
+    @OperatorOrSuperAdmin
     public ApiResponse<AlertOperationResponseData> close(@PathVariable Long id,
                                                          @Valid @RequestBody AlertActionRequest request,
                                                          Authentication authentication) {
@@ -87,7 +87,7 @@ public class AlertController {
     }
 
     @GetMapping("/{id}/action-logs")
-    @AnyUserRole
+    @AnyReadRole
     public ApiResponse<AlertActionLogsResponseData> actionLogs(@PathVariable Long id) {
         return ApiResponse.success(alertService.listActionLogs(id));
     }

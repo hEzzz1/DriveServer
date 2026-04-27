@@ -3,6 +3,7 @@ package com.example.demo.auth;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
@@ -54,7 +55,7 @@ class AuthModuleIntegrationTest {
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
 
-        Role admin = saveRole("ADMIN", "系统管理员");
+        Role admin = saveRole("SUPER_ADMIN", "超级管理员");
         Role viewer = saveRole("VIEWER", "观察员");
 
         UserAccount adminUser = saveUser("admin", "123456", 1);
@@ -77,7 +78,7 @@ class AuthModuleIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.token").isNotEmpty())
-                .andExpect(jsonPath("$.data.roles[0]").value("ADMIN"));
+                .andExpect(jsonPath("$.data.roles[0]").value("SUPER_ADMIN"));
     }
 
     @Test
@@ -148,6 +149,7 @@ class AuthModuleIntegrationTest {
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setNickname(username);
+        user.setSubjectType(SubjectType.USER.name());
         user.setStatus((byte) status);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());

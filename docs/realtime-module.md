@@ -128,7 +128,7 @@ WebSocket 握手沿用现有 JWT 鉴权链路：
 
 ## 9. 总览接口说明
 - 路径：`GET /api/v1/realtime/overview`
-- 鉴权：`ADMIN` / `OPERATOR` / `VIEWER`
+- 鉴权：`OPERATOR` / `ANALYST` / `VIEWER` / `RISK_ADMIN` / `SYS_ADMIN` / `SUPER_ADMIN`
 - 可选参数：`fleetId`
 
 返回能力：

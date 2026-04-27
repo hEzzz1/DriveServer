@@ -3,6 +3,7 @@ package com.example.demo.ingest;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.auth.model.SubjectType;
 import com.example.demo.alert.entity.AlertEvent;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
@@ -71,8 +72,9 @@ class IngestModuleIntegrationTest {
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
 
-        Role admin = saveRole("ADMIN", "系统管理员");
+        Role admin = saveRole("SUPER_ADMIN", "超级管理员");
         UserAccount adminUser = saveUser("admin", "123456", 1);
+        saveSystemUser("system-auto-alert");
         bindUserRole(adminUser.getId(), admin.getId());
         saveRule("RISK_HIGH", "高风险规则", 3, "0.8000", 3, 60, true, "ENABLED");
         saveRule("RISK_MID", "中风险规则", 2, "0.6500", 5, 60, true, "ENABLED");
@@ -298,7 +300,20 @@ class IngestModuleIntegrationTest {
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setNickname(username);
+        user.setSubjectType(SubjectType.USER.name());
         user.setStatus((byte) status);
+        user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
+        return userAccountRepository.save(user);
+    }
+
+    private UserAccount saveSystemUser(String username) {
+        UserAccount user = new UserAccount();
+        user.setUsername(username);
+        user.setPasswordHash(passwordEncoder.encode("system-only"));
+        user.setNickname(username);
+        user.setSubjectType(SubjectType.SYSTEM.name());
+        user.setStatus((byte) 0);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
         return userAccountRepository.save(user);
