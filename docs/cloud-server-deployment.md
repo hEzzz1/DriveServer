@@ -411,6 +411,7 @@ chmod +x deploy/bootstrap.sh deploy/release.sh
 脚本会尝试完成：
 1. 安装 `Java 17`、`Docker`、`Docker Compose`、`Nginx`、`curl`
 2. 从 `.env.prod.example` 生成 `.env.prod`
+3. 默认把前端仓库放在当前仓库同级目录的 `../DriveWeb/web`
 
 在 `CentOS 7.9` 上：
 1. 脚本会优先安装 `docker-ce`
@@ -420,7 +421,8 @@ chmod +x deploy/bootstrap.sh deploy/release.sh
 初始化完成后：
 1. 打开 `.env.prod`
 2. 修改真实的 `MYSQL_ROOT_PASSWORD`、`DB_PASSWORD`、`JWT_SECRET`
-3. 再执行 `./deploy/release.sh compose`
+3. 如果你的前端仓库不在同级目录，修改 `FRONTEND_CONTEXT`
+4. 再执行 `./deploy/release.sh compose`
 
 可选环境变量：
 ```bash
@@ -474,9 +476,9 @@ curl http://你的域名或公网IP/actuator/health
 ```
 
 重点检查：
-1. `app`、`mysql`、`redis`、`influxdb3`、`nginx` 均正常运行
+1. `web`、`app`、`mysql`、`redis`、`influxdb3`、`nginx` 均正常运行
 2. 健康检查返回 `UP`
-3. Nginx 能成功转发到应用
+3. Nginx 能成功转发到前端与后端
 4. 登录接口、业务接口、WebSocket 能正常访问
 
 如果已经采用这一方式，一般不需要再单独创建 `driveserver.service`。
@@ -491,10 +493,11 @@ chmod +x deploy/release.sh
 ```
 
 脚本会按顺序执行：
-1. 进入项目目录后执行 `git pull --ff-only`
-2. 使用 BuildKit 执行 `docker compose --env-file .env.prod -f compose.prod.yaml up -d --build`
-3. `docker compose --env-file .env.prod -f compose.prod.yaml ps`
-4. `curl http://127.0.0.1/actuator/health`
+1. 进入后端仓库目录后执行 `git pull --ff-only`
+2. 如果同级 `DriveWeb` 仓库存在，也会同步执行 `git pull --ff-only`
+3. 使用 BuildKit 执行 `docker compose --env-file .env.prod -f compose.prod.yaml up -d --build`
+4. `docker compose --env-file .env.prod -f compose.prod.yaml ps`
+5. `curl http://127.0.0.1/actuator/health`
 
 说明：
 1. 当前 `Dockerfile` 已拆分 Maven 依赖预热层，并复用 `/root/.m2` 构建缓存
@@ -505,6 +508,7 @@ chmod +x deploy/release.sh
 SKIP_PULL=1 ./deploy/release.sh compose
 ENV_FILE=.env.prod ./deploy/release.sh compose
 COMPOSE_FILE=compose.prod.yaml ./deploy/release.sh compose
+FRONTEND_ROOT=/opt/DriveWeb ./deploy/release.sh compose
 ```
 
 ### 6.8 一键回滚
@@ -538,10 +542,40 @@ COMPOSE_FILE=compose.prod.yaml ./deploy/rollback.sh compose HEAD~1
 1. 如果回滚目标是具体提交号而不是分支名，Git 可能进入 detached HEAD
 2. 后续恢复正常发布前，记得先切回你的发布分支，再执行 `./deploy/release.sh compose`
 
-## 7. 发布更新
+## 7. Push 即自动部署
+如果你的两个仓库都托管在 GitHub，可以直接使用仓库内的 GitHub Actions：
+
+1. `DriveServer/.github/workflows/deploy.yml`
+2. `DriveWeb/.github/workflows/deploy.yml`
+
+触发条件：
+1. 推送到 `master` 或 `main`
+2. 手动点击 `workflow_dispatch`
+
+GitHub Secrets 需要配置：
+1. `SERVER_HOST`
+2. `SERVER_PORT`
+3. `SERVER_USER`
+4. `SERVER_SSH_KEY`
+
+服务器目录约定：
+1. 后端仓库：`/opt/DriveServer`
+2. 前端仓库：`/opt/DriveWeb`
+
+发布动作：
+1. Actions 通过 SSH 登录服务器
+2. 在 `/opt/DriveServer` 执行 `FRONTEND_ROOT=/opt/DriveWeb ./deploy/release.sh compose`
+3. `release.sh` 会自动拉取前端和后端最新代码并重建容器
+
+注意：
+1. 这是“push 后自动部署”的最小实现，不依赖 webhook 服务
+2. 生产机上两仓库都要先 `git clone` 到固定目录
+3. 如果你的目录不同，只要把 workflow 里的路径和 `FRONTEND_ROOT` 改掉即可
+
+## 8. 发布更新
 代码更新后的常规发布流程：
 
-### 7.1 方式 A 更新流程
+### 8.1 方式 A 更新流程
 ```bash
 cd /opt/DriveServer
 git pull
@@ -555,7 +589,7 @@ sudo systemctl status driveserver
 docker compose up -d
 ```
 
-### 7.2 方式 B 更新流程
+### 8.2 方式 B 更新流程
 ```bash
 cd /opt/DriveServer
 git pull
@@ -563,7 +597,7 @@ docker compose --env-file .env.prod -f compose.prod.yaml up -d --build
 docker compose --env-file .env.prod -f compose.prod.yaml ps
 ```
 
-## 8. 回滚思路
+## 9. 回滚思路
 如果新版本启动失败，优先使用仓库内的 `deploy/rollback.sh`。
 
 手工回滚时可参考：
@@ -590,39 +624,39 @@ docker compose --env-file .env.prod -f compose.prod.yaml up -d --build
 
 如果数据库 migration 已执行，回滚前需要先确认是否包含破坏性变更。
 
-## 9. 常见问题
-### 9.1 应用启动失败
+## 10. 常见问题
+### 10.1 应用启动失败
 排查顺序：
 1. `sudo journalctl -u driveserver -n 200 --no-pager`
 2. 检查 `/etc/driveserver/driveserver.env`
 3. 检查 MySQL/Redis 容器是否存活
 4. 检查 `target/*.jar` 是否存在
 
-### 9.2 数据库连接失败
+### 10.2 数据库连接失败
 检查：
 1. `DB_URL` 是否指向 `127.0.0.1:3306`
 2. `DB_USERNAME` / `DB_PASSWORD` 是否正确
 3. `docker compose ps` 中 MySQL 是否为 `healthy`
 
-### 9.3 Redis 连接失败
+### 10.3 Redis 连接失败
 检查：
 1. `REDIS_HOST` 是否为 `127.0.0.1`
 2. `REDIS_PORT` 是否为 `6379`
 3. Redis 容器是否健康
 
-### 9.4 WebSocket 不通
+### 10.4 WebSocket 不通
 检查：
 1. Nginx 是否配置了 `Upgrade` 和 `Connection` 头
 2. 前端连接路径是否与后端端点一致
 3. 反向代理是否走了正确域名和端口
 
-### 9.5 Docker 镜像构建失败
+### 10.5 Docker 镜像构建失败
 检查：
 1. 服务器是否已安装并启动 Docker
 2. 项目根目录是否包含完整源码、`pom.xml` 和 `.mvn`
 3. 是否因网络原因无法拉取基础镜像
 
-## 10. 生产环境建议
+## 11. 生产环境建议
 上线前建议至少完成以下项：
 1. 修改 MySQL 默认 root 密码
 2. 修改默认 `JWT_SECRET`

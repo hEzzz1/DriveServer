@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -28,4 +29,4 @@ jobs:
             set -e
             cd /opt/DriveServer
             git pull --ff-only
-            ./deploy/release.sh compose
+            FRONTEND_ROOT=/opt/DriveWeb ./deploy/release.sh compose

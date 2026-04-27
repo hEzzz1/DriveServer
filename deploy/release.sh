@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:-}"
 SKIP_PULL="${SKIP_PULL:-0}"
+FRONTEND_ROOT="${FRONTEND_ROOT:-$(cd "$ROOT_DIR/.." && pwd)/DriveWeb}"
 SYSTEMD_SERVICE="${SYSTEMD_SERVICE:-driveserver}"
 ENV_FILE="${ENV_FILE:-.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-compose.prod.yaml}"
@@ -99,6 +100,11 @@ git_pull_if_needed() {
   fi
 
   run bash -lc "cd \"$ROOT_DIR\" && git pull --ff-only"
+  if [[ -d "$FRONTEND_ROOT/.git" ]]; then
+    run bash -lc "cd \"$FRONTEND_ROOT\" && git pull --ff-only"
+  else
+    log "Skipping frontend pull: $FRONTEND_ROOT is not a git repository"
+  fi
 }
 
 deploy_systemd() {
