@@ -13,6 +13,9 @@ import java.time.OffsetDateTime;
 public class CreateAlertRequest {
 
     @NotNull
+    private Long enterpriseId;
+
+    @NotNull
     private Long fleetId;
 
     @NotNull
@@ -20,6 +23,32 @@ public class CreateAlertRequest {
 
     @NotNull
     private Long driverId;
+
+    private Long deviceId;
+
+    private Long sessionId;
+
+    private Long reportedEnterpriseId;
+
+    private Long reportedFleetId;
+
+    private Long reportedVehicleId;
+
+    private Long reportedDriverId;
+
+    private Long resolvedEnterpriseId;
+
+    private Long resolvedFleetId;
+
+    private Long resolvedVehicleId;
+
+    private Long resolvedDriverId;
+
+    @Size(max = 32)
+    private String resolutionStatus;
+
+    @Size(max = 64)
+    private String configVersion;
 
     @NotNull
     private Long ruleId;
@@ -68,6 +97,14 @@ public class CreateAlertRequest {
     @Min(0)
     private Long edgeCreatedAtMs;
 
+    public Long getEnterpriseId() {
+        return enterpriseId;
+    }
+
+    public void setEnterpriseId(Long enterpriseId) {
+        this.enterpriseId = enterpriseId;
+    }
+
     public Long getFleetId() {
         return fleetId;
     }
@@ -90,6 +127,102 @@ public class CreateAlertRequest {
 
     public void setDriverId(Long driverId) {
         this.driverId = driverId;
+    }
+
+    public Long getDeviceId() {
+        return deviceId;
+    }
+
+    public void setDeviceId(Long deviceId) {
+        this.deviceId = deviceId;
+    }
+
+    public Long getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(Long sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    public Long getReportedEnterpriseId() {
+        return reportedEnterpriseId;
+    }
+
+    public void setReportedEnterpriseId(Long reportedEnterpriseId) {
+        this.reportedEnterpriseId = reportedEnterpriseId;
+    }
+
+    public Long getReportedFleetId() {
+        return reportedFleetId;
+    }
+
+    public void setReportedFleetId(Long reportedFleetId) {
+        this.reportedFleetId = reportedFleetId;
+    }
+
+    public Long getReportedVehicleId() {
+        return reportedVehicleId;
+    }
+
+    public void setReportedVehicleId(Long reportedVehicleId) {
+        this.reportedVehicleId = reportedVehicleId;
+    }
+
+    public Long getReportedDriverId() {
+        return reportedDriverId;
+    }
+
+    public void setReportedDriverId(Long reportedDriverId) {
+        this.reportedDriverId = reportedDriverId;
+    }
+
+    public Long getResolvedEnterpriseId() {
+        return resolvedEnterpriseId;
+    }
+
+    public void setResolvedEnterpriseId(Long resolvedEnterpriseId) {
+        this.resolvedEnterpriseId = resolvedEnterpriseId;
+    }
+
+    public Long getResolvedFleetId() {
+        return resolvedFleetId;
+    }
+
+    public void setResolvedFleetId(Long resolvedFleetId) {
+        this.resolvedFleetId = resolvedFleetId;
+    }
+
+    public Long getResolvedVehicleId() {
+        return resolvedVehicleId;
+    }
+
+    public void setResolvedVehicleId(Long resolvedVehicleId) {
+        this.resolvedVehicleId = resolvedVehicleId;
+    }
+
+    public Long getResolvedDriverId() {
+        return resolvedDriverId;
+    }
+
+    public void setResolvedDriverId(Long resolvedDriverId) {
+        this.resolvedDriverId = resolvedDriverId;
+    }
+
+    public String getResolutionStatus() {
+        return resolutionStatus;
+    }
+
+    public void setResolutionStatus(String resolutionStatus) {
+        this.resolutionStatus = resolutionStatus;
+    }
+
+    public String getConfigVersion() {
+        return configVersion;
+    }
+
+    public void setConfigVersion(String configVersion) {
+        this.configVersion = configVersion;
     }
 
     public Long getRuleId() {

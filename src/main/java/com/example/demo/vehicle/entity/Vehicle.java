@@ -1,4 +1,4 @@
-package com.example.demo.driver.entity;
+package com.example.demo.vehicle.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,8 +10,8 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "driver")
-public class Driver {
+@Table(name = "vehicle")
+public class Vehicle {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,20 +23,11 @@ public class Driver {
     @Column(name = "fleet_id", nullable = false)
     private Long fleetId;
 
-    @Column(name = "driver_code", length = 64)
-    private String driverCode;
+    @Column(name = "plate_number", nullable = false, length = 32)
+    private String plateNumber;
 
-    @Column(nullable = false, length = 64)
-    private String name;
-
-    @Column(length = 32)
-    private String phone;
-
-    @Column(name = "license_no", length = 64)
-    private String licenseNo;
-
-    @Column(name = "pin_hash", length = 255)
-    private String pinHash;
+    @Column(length = 64)
+    private String vin;
 
     @Column(nullable = false)
     private Byte status;
@@ -74,44 +65,20 @@ public class Driver {
         this.fleetId = fleetId;
     }
 
-    public String getDriverCode() {
-        return driverCode;
+    public String getPlateNumber() {
+        return plateNumber;
     }
 
-    public void setDriverCode(String driverCode) {
-        this.driverCode = driverCode;
+    public void setPlateNumber(String plateNumber) {
+        this.plateNumber = plateNumber;
     }
 
-    public String getName() {
-        return name;
+    public String getVin() {
+        return vin;
     }
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
-
-    public String getLicenseNo() {
-        return licenseNo;
-    }
-
-    public void setLicenseNo(String licenseNo) {
-        this.licenseNo = licenseNo;
-    }
-
-    public String getPinHash() {
-        return pinHash;
-    }
-
-    public void setPinHash(String pinHash) {
-        this.pinHash = pinHash;
+    public void setVin(String vin) {
+        this.vin = vin;
     }
 
     public Byte getStatus() {

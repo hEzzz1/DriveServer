@@ -20,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -43,17 +44,20 @@ public class DriverManagementService {
     private final FleetRepository fleetRepository;
     private final BusinessAccessService businessAccessService;
     private final SystemAuditService systemAuditService;
+    private final PasswordEncoder passwordEncoder;
 
     public DriverManagementService(DriverRepository driverRepository,
                                    EnterpriseRepository enterpriseRepository,
                                    FleetRepository fleetRepository,
                                    BusinessAccessService businessAccessService,
-                                   SystemAuditService systemAuditService) {
+                                   SystemAuditService systemAuditService,
+                                   PasswordEncoder passwordEncoder) {
         this.driverRepository = driverRepository;
         this.enterpriseRepository = enterpriseRepository;
         this.fleetRepository = fleetRepository;
         this.businessAccessService = businessAccessService;
         this.systemAuditService = systemAuditService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional(readOnly = true)
@@ -96,6 +100,7 @@ public class DriverManagementService {
         Driver driver = new Driver();
         driver.setEnterpriseId(enterpriseId);
         driver.setFleetId(request.fleetId());
+        driver.setDriverCode(generateDriverCode(enterpriseId, request.driverCode()));
         driver.setName(normalizeRequired(request.name(), "name不能为空"));
         driver.setPhone(normalizeOptional(request.phone()));
         driver.setLicenseNo(normalizeOptional(request.licenseNo()));
@@ -115,6 +120,11 @@ public class DriverManagementService {
         Driver driver = getDriverEntity(driverId);
         businessAccessService.assertCanManageEnterprise(operator, driver.getEnterpriseId());
         Map<String, Object> before = snapshot(driver);
+        String driverCode = generateDriverCode(driver.getEnterpriseId(), request.driverCode());
+        if (!driverCode.equals(driver.getDriverCode()) && driverRepository.existsByEnterpriseIdAndDriverCode(driver.getEnterpriseId(), driverCode)) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "driverCode已存在");
+        }
+        driver.setDriverCode(driverCode);
         driver.setName(normalizeRequired(request.name(), "name不能为空"));
         driver.setPhone(normalizeOptional(request.phone()));
         driver.setLicenseNo(normalizeOptional(request.licenseNo()));
@@ -150,6 +160,18 @@ public class DriverManagementService {
 
         systemAuditService.record(operator, "DRIVER", "REASSIGN_DRIVER_FLEET", "DRIVER", String.valueOf(saved.getId()),
                 "SUCCESS", "调整驾驶员所属车队", auditDetail(operator, saved.getId(), saved.getEnterpriseId(), before, snapshot(saved)));
+        return toDetail(saved);
+    }
+
+    @Transactional
+    public DriverDetailResponseData resetPin(AuthenticatedUser operator, Long driverId, String pin) {
+        Driver driver = getDriverEntity(driverId);
+        businessAccessService.assertCanManageEnterprise(operator, driver.getEnterpriseId());
+        Map<String, Object> before = snapshot(driver);
+        driver.setPinHash(passwordEncoder.encode(normalizeRequired(pin, "pin不能为空")));
+        Driver saved = driverRepository.save(driver);
+        systemAuditService.record(operator, "DRIVER", "RESET_DRIVER_PIN", "DRIVER", String.valueOf(saved.getId()),
+                "SUCCESS", "重置驾驶员PIN", auditDetail(operator, saved.getId(), saved.getEnterpriseId(), before, snapshot(saved)));
         return toDetail(saved);
     }
 
@@ -211,6 +233,7 @@ public class DriverManagementService {
                 driver.getId(),
                 driver.getEnterpriseId(),
                 driver.getFleetId(),
+                driver.getDriverCode(),
                 driver.getName(),
                 driver.getPhone(),
                 driver.getLicenseNo(),
@@ -225,6 +248,7 @@ public class DriverManagementService {
                 driver.getId(),
                 driver.getEnterpriseId(),
                 driver.getFleetId(),
+                driver.getDriverCode(),
                 driver.getName(),
                 driver.getPhone(),
                 driver.getLicenseNo(),
@@ -239,6 +263,7 @@ public class DriverManagementService {
         snapshot.put("id", driver.getId());
         snapshot.put("enterpriseId", driver.getEnterpriseId());
         snapshot.put("fleetId", driver.getFleetId());
+        snapshot.put("driverCode", driver.getDriverCode());
         snapshot.put("name", driver.getName());
         snapshot.put("phone", driver.getPhone());
         snapshot.put("licenseNo", driver.getLicenseNo());
@@ -314,6 +339,17 @@ public class DriverManagementService {
 
     private String normalizeOptional(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String generateDriverCode(Long enterpriseId, String requestedCode) {
+        String candidate = StringUtils.hasText(requestedCode) ? requestedCode.trim() : "DRV-" + enterpriseId + "-" + System.currentTimeMillis();
+        if (!StringUtils.hasText(requestedCode) && !driverRepository.existsByEnterpriseIdAndDriverCode(enterpriseId, candidate)) {
+            return candidate;
+        }
+        if (!driverRepository.existsByEnterpriseIdAndDriverCode(enterpriseId, candidate)) {
+            return candidate;
+        }
+        throw new BusinessException(ApiCode.INVALID_PARAM, "driverCode已存在");
     }
 
     private OffsetDateTime toOffsetDateTime(LocalDateTime value) {

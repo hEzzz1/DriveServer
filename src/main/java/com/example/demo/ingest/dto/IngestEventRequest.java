@@ -24,6 +24,8 @@ public class IngestEventRequest {
     @Size(max = 64)
     private String driverId;
 
+    private Long sessionId;
+
     @NotNull
     private OffsetDateTime eventTime;
 
@@ -97,6 +99,14 @@ public class IngestEventRequest {
 
     public void setDriverId(String driverId) {
         this.driverId = driverId;
+    }
+
+    public Long getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(Long sessionId) {
+        this.sessionId = sessionId;
     }
 
     public OffsetDateTime getEventTime() {

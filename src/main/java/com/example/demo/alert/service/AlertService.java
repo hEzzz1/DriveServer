@@ -66,9 +66,22 @@ public class AlertService {
 
         AlertEvent alert = new AlertEvent();
         alert.setAlertNo(generateAlertNo(now));
+        alert.setEnterpriseId(request.getEnterpriseId());
         alert.setFleetId(request.getFleetId());
         alert.setVehicleId(request.getVehicleId());
         alert.setDriverId(request.getDriverId());
+        alert.setDeviceId(request.getDeviceId());
+        alert.setSessionId(request.getSessionId());
+        alert.setReportedEnterpriseId(request.getReportedEnterpriseId());
+        alert.setReportedFleetId(request.getReportedFleetId());
+        alert.setReportedVehicleId(request.getReportedVehicleId());
+        alert.setReportedDriverId(request.getReportedDriverId());
+        alert.setResolvedEnterpriseId(request.getResolvedEnterpriseId());
+        alert.setResolvedFleetId(request.getResolvedFleetId());
+        alert.setResolvedVehicleId(request.getResolvedVehicleId());
+        alert.setResolvedDriverId(request.getResolvedDriverId());
+        alert.setResolutionStatus(normalizeOptionalText(request.getResolutionStatus()));
+        alert.setConfigVersion(normalizeOptionalText(request.getConfigVersion()));
         alert.setRuleId(request.getRuleId());
         alert.setRiskLevel(request.getRiskLevel().byteValue());
         alert.setRiskScore(request.getRiskScore());

@@ -2,6 +2,7 @@ package com.example.demo.ingest.service;
 
 import com.example.demo.alert.dto.CreateAlertRequest;
 import com.example.demo.alert.service.AlertService;
+import com.example.demo.device.entity.Device;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.UserAccountRepository;
@@ -15,6 +16,7 @@ import com.example.demo.rule.model.RiskLevel;
 import com.example.demo.rule.model.RuleEvent;
 import com.example.demo.rule.service.RuleDefinitionProvider;
 import com.example.demo.rule.service.RuleEngineService;
+import com.example.demo.session.service.EventOwnershipResolution;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -48,7 +50,7 @@ public class EventAlertOrchestrator {
         this.userAccountRepository = userAccountRepository;
     }
 
-    public void process(IngestEventRequest request) {
+    public void process(IngestEventRequest request, Device device, EventOwnershipResolution resolution) {
         try {
             List<RuleDefinition> activeRules = ruleDefinitionProvider.loadEnabledRuleDefinitions();
             if (activeRules.isEmpty()) {
@@ -58,8 +60,8 @@ public class EventAlertOrchestrator {
                 return;
             }
             CreateAlertRequest createRequest = hasCompleteEdgeWarning(request)
-                    ? toEdgeAlertRequest(request, activeRules)
-                    : toFallbackAlertRequest(request, activeRules);
+                    ? toEdgeAlertRequest(request, activeRules, device, resolution)
+                    : toFallbackAlertRequest(request, activeRules, device, resolution);
             alertService.createAlert(createRequest, systemOperator());
             log.info("INGEST_WARNING_CREATED eventId={} vehicleId={} ruleId={} riskLevel={} riskScore={} edgeRiskLevel={}",
                     request.getEventId(),
@@ -76,13 +78,13 @@ public class EventAlertOrchestrator {
         }
     }
 
-    private CreateAlertRequest toEdgeAlertRequest(IngestEventRequest request, List<RuleDefinition> activeRules) {
+    private CreateAlertRequest toEdgeAlertRequest(IngestEventRequest request, List<RuleDefinition> activeRules, Device device, EventOwnershipResolution resolution) {
         int riskLevelCode = parseEdgeRiskLevel(request.getRiskLevel());
         RuleDefinition matchedRule = findRuleByRiskLevelCode(activeRules, riskLevelCode);
-        return buildCreateAlertRequest(request, matchedRule.getRuleId(), riskLevelCode, maxRiskScore(request));
+        return buildCreateAlertRequest(request, matchedRule.getRuleId(), riskLevelCode, maxRiskScore(request), device, resolution);
     }
 
-    private CreateAlertRequest toFallbackAlertRequest(IngestEventRequest request, List<RuleDefinition> activeRules) {
+    private CreateAlertRequest toFallbackAlertRequest(IngestEventRequest request, List<RuleDefinition> activeRules, Device device, EventOwnershipResolution resolution) {
         RuleEvaluationResult result = ruleEngineService.evaluate(toRuleEvent(request), activeRules);
         RuleDefinition matchedRule = result.isTriggered()
                 ? Objects.requireNonNull(result.getMatchedRule(), "matched rule is missing for triggered event")
@@ -91,17 +93,34 @@ public class EventAlertOrchestrator {
                 request,
                 matchedRule.getRuleId(),
                 matchedRule.getRiskLevel().getCode(),
-                result.getRiskScore());
+                result.getRiskScore(),
+                device,
+                resolution);
     }
 
     private CreateAlertRequest buildCreateAlertRequest(IngestEventRequest request,
                                                        Long ruleId,
                                                        Integer riskLevel,
-                                                       BigDecimal riskScore) {
+                                                       BigDecimal riskScore,
+                                                       Device device,
+                                                       EventOwnershipResolution resolution) {
         CreateAlertRequest createRequest = new CreateAlertRequest();
-        createRequest.setFleetId(parseOptionalBusinessId(request.getFleetId()));
-        createRequest.setVehicleId(parseBusinessId(request.getVehicleId(), "vehicleId"));
-        createRequest.setDriverId(parseOptionalBusinessId(request.getDriverId()));
+        createRequest.setEnterpriseId(resolution.resolvedEnterpriseId());
+        createRequest.setFleetId(resolution.resolvedFleetId());
+        createRequest.setVehicleId(resolution.resolvedVehicleId() == null ? device.getVehicleId() : resolution.resolvedVehicleId());
+        createRequest.setDriverId(resolution.resolvedDriverId() == null ? 0L : resolution.resolvedDriverId());
+        createRequest.setDeviceId(resolution.deviceId());
+        createRequest.setSessionId(resolution.sessionId());
+        createRequest.setReportedEnterpriseId(resolution.reportedEnterpriseId());
+        createRequest.setReportedFleetId(resolution.reportedFleetId());
+        createRequest.setReportedVehicleId(resolution.reportedVehicleId());
+        createRequest.setReportedDriverId(resolution.reportedDriverId());
+        createRequest.setResolvedEnterpriseId(resolution.resolvedEnterpriseId());
+        createRequest.setResolvedFleetId(resolution.resolvedFleetId());
+        createRequest.setResolvedVehicleId(resolution.resolvedVehicleId());
+        createRequest.setResolvedDriverId(resolution.resolvedDriverId());
+        createRequest.setResolutionStatus(resolution.resolutionStatus().name());
+        createRequest.setConfigVersion(normalizeOptionalText(request.getAlgorithmVer()));
         createRequest.setRuleId(ruleId);
         createRequest.setRiskLevel(riskLevel);
         createRequest.setRiskScore(scale(riskScore));

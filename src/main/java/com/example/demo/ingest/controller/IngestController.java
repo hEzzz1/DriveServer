@@ -23,8 +23,9 @@ public class IngestController {
 
     @PostMapping
     public ApiResponse<IngestEventResponseData> ingest(
+            @RequestHeader(value = "X-Device-Code", required = false) String deviceCode,
             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken,
             @Valid @RequestBody IngestEventRequest request) {
-        return ApiResponse.success(ingestService.ingest(deviceToken, request));
+        return ApiResponse.success(ingestService.ingest(deviceCode, deviceToken, request));
     }
 }

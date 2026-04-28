@@ -1,18 +1,16 @@
-package com.example.demo.driver.dto;
+package com.example.demo.vehicle.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
-public record CreateDriverRequest(
+public record CreateVehicleRequest(
         @NotNull(message = "enterpriseId不能为空")
         Long enterpriseId,
         @NotNull(message = "fleetId不能为空")
         Long fleetId,
-        String driverCode,
-        @NotBlank(message = "name不能为空")
-        String name,
-        String phone,
-        String licenseNo,
+        @NotBlank(message = "plateNumber不能为空")
+        String plateNumber,
+        String vin,
         String remark
 ) {
 }

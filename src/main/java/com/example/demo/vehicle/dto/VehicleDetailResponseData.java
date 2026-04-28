@@ -1,15 +1,13 @@
-package com.example.demo.driver.dto;
+package com.example.demo.vehicle.dto;
 
 import java.time.OffsetDateTime;
 
-public record DriverListItemData(
+public record VehicleDetailResponseData(
         Long id,
         Long enterpriseId,
         Long fleetId,
-        String driverCode,
-        String name,
-        String phone,
-        String licenseNo,
+        String plateNumber,
+        String vin,
         Byte status,
         String remark,
         OffsetDateTime createdAt,

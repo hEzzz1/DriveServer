@@ -1,4 +1,4 @@
-package com.example.demo.driver.entity;
+package com.example.demo.device.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,8 +10,8 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "driver")
-public class Driver {
+@Table(name = "device")
+public class Device {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,20 +23,26 @@ public class Driver {
     @Column(name = "fleet_id", nullable = false)
     private Long fleetId;
 
-    @Column(name = "driver_code", length = 64)
-    private String driverCode;
+    @Column(name = "vehicle_id", nullable = false)
+    private Long vehicleId;
 
-    @Column(nullable = false, length = 64)
-    private String name;
+    @Column(name = "device_code", nullable = false, length = 64, unique = true)
+    private String deviceCode;
 
-    @Column(length = 32)
-    private String phone;
+    @Column(name = "device_name", nullable = false, length = 128)
+    private String deviceName;
 
-    @Column(name = "license_no", length = 64)
-    private String licenseNo;
+    @Column(name = "activation_code", length = 64)
+    private String activationCode;
 
-    @Column(name = "pin_hash", length = 255)
-    private String pinHash;
+    @Column(name = "device_token", length = 255, unique = true)
+    private String deviceToken;
+
+    @Column(name = "last_activated_at")
+    private LocalDateTime lastActivatedAt;
+
+    @Column(name = "token_rotated_at")
+    private LocalDateTime tokenRotatedAt;
 
     @Column(nullable = false)
     private Byte status;
@@ -74,44 +80,60 @@ public class Driver {
         this.fleetId = fleetId;
     }
 
-    public String getDriverCode() {
-        return driverCode;
+    public Long getVehicleId() {
+        return vehicleId;
     }
 
-    public void setDriverCode(String driverCode) {
-        this.driverCode = driverCode;
+    public void setVehicleId(Long vehicleId) {
+        this.vehicleId = vehicleId;
     }
 
-    public String getName() {
-        return name;
+    public String getDeviceCode() {
+        return deviceCode;
     }
 
-    public void setName(String name) {
-        this.name = name;
+    public void setDeviceCode(String deviceCode) {
+        this.deviceCode = deviceCode;
     }
 
-    public String getPhone() {
-        return phone;
+    public String getDeviceName() {
+        return deviceName;
     }
 
-    public void setPhone(String phone) {
-        this.phone = phone;
+    public void setDeviceName(String deviceName) {
+        this.deviceName = deviceName;
     }
 
-    public String getLicenseNo() {
-        return licenseNo;
+    public String getActivationCode() {
+        return activationCode;
     }
 
-    public void setLicenseNo(String licenseNo) {
-        this.licenseNo = licenseNo;
+    public void setActivationCode(String activationCode) {
+        this.activationCode = activationCode;
     }
 
-    public String getPinHash() {
-        return pinHash;
+    public String getDeviceToken() {
+        return deviceToken;
     }
 
-    public void setPinHash(String pinHash) {
-        this.pinHash = pinHash;
+    public void setDeviceToken(String deviceToken) {
+        this.deviceToken = deviceToken;
+    }
+
+    public LocalDateTime getLastActivatedAt() {
+        return lastActivatedAt;
+    }
+
+    public void setLastActivatedAt(LocalDateTime lastActivatedAt) {
+        this.lastActivatedAt = lastActivatedAt;
+    }
+
+    public LocalDateTime getTokenRotatedAt() {
+        return tokenRotatedAt;
+    }
+
+    public void setTokenRotatedAt(LocalDateTime tokenRotatedAt) {
+        this.tokenRotatedAt = tokenRotatedAt;
     }
 
     public Byte getStatus() {

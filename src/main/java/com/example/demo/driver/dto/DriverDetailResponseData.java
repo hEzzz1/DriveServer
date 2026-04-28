@@ -6,6 +6,7 @@ public record DriverDetailResponseData(
         Long id,
         Long enterpriseId,
         Long fleetId,
+        String driverCode,
         String name,
         String phone,
         String licenseNo,

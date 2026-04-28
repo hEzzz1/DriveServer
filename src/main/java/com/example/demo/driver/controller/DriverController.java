@@ -8,6 +8,7 @@ import com.example.demo.driver.dto.CreateDriverRequest;
 import com.example.demo.driver.dto.DriverDetailResponseData;
 import com.example.demo.driver.dto.DriverPageResponseData;
 import com.example.demo.driver.dto.ReassignDriverFleetRequest;
+import com.example.demo.driver.dto.ResetDriverPinRequest;
 import com.example.demo.driver.dto.UpdateDriverRequest;
 import com.example.demo.driver.dto.UpdateDriverStatusRequest;
 import com.example.demo.driver.service.DriverManagementService;
@@ -80,6 +81,14 @@ public class DriverController {
                                                                      @Valid @RequestBody ReassignDriverFleetRequest request,
                                                                      Authentication authentication) {
         return ApiResponse.success(driverManagementService.reassignFleet(currentUser(authentication), id, request));
+    }
+
+    @PostMapping("/{id}/reset-pin")
+    @EnterpriseAdminOrSuperAdmin
+    public ApiResponse<DriverDetailResponseData> resetDriverPin(@PathVariable Long id,
+                                                                @Valid @RequestBody ResetDriverPinRequest request,
+                                                                Authentication authentication) {
+        return ApiResponse.success(driverManagementService.resetPin(currentUser(authentication), id, request.pin()));
     }
 
     private AuthenticatedUser currentUser(Authentication authentication) {

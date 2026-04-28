@@ -1,4 +1,4 @@
-package com.example.demo.driver.entity;
+package com.example.demo.session.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,12 +10,15 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "driver")
-public class Driver {
+@Table(name = "driving_session")
+public class DrivingSession {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "session_no", nullable = false, length = 64, unique = true)
+    private String sessionNo;
 
     @Column(name = "enterprise_id", nullable = false)
     private Long enterpriseId;
@@ -23,23 +26,26 @@ public class Driver {
     @Column(name = "fleet_id", nullable = false)
     private Long fleetId;
 
-    @Column(name = "driver_code", length = 64)
-    private String driverCode;
+    @Column(name = "vehicle_id", nullable = false)
+    private Long vehicleId;
 
-    @Column(nullable = false, length = 64)
-    private String name;
+    @Column(name = "driver_id", nullable = false)
+    private Long driverId;
 
-    @Column(length = 32)
-    private String phone;
+    @Column(name = "device_id", nullable = false)
+    private Long deviceId;
 
-    @Column(name = "license_no", length = 64)
-    private String licenseNo;
+    @Column(name = "sign_in_time", nullable = false)
+    private LocalDateTime signInTime;
 
-    @Column(name = "pin_hash", length = 255)
-    private String pinHash;
+    @Column(name = "sign_out_time")
+    private LocalDateTime signOutTime;
 
     @Column(nullable = false)
     private Byte status;
+
+    @Column(name = "closed_reason", length = 64)
+    private String closedReason;
 
     @Column(length = 255)
     private String remark;
@@ -58,6 +64,14 @@ public class Driver {
         this.id = id;
     }
 
+    public String getSessionNo() {
+        return sessionNo;
+    }
+
+    public void setSessionNo(String sessionNo) {
+        this.sessionNo = sessionNo;
+    }
+
     public Long getEnterpriseId() {
         return enterpriseId;
     }
@@ -74,44 +88,44 @@ public class Driver {
         this.fleetId = fleetId;
     }
 
-    public String getDriverCode() {
-        return driverCode;
+    public Long getVehicleId() {
+        return vehicleId;
     }
 
-    public void setDriverCode(String driverCode) {
-        this.driverCode = driverCode;
+    public void setVehicleId(Long vehicleId) {
+        this.vehicleId = vehicleId;
     }
 
-    public String getName() {
-        return name;
+    public Long getDriverId() {
+        return driverId;
     }
 
-    public void setName(String name) {
-        this.name = name;
+    public void setDriverId(Long driverId) {
+        this.driverId = driverId;
     }
 
-    public String getPhone() {
-        return phone;
+    public Long getDeviceId() {
+        return deviceId;
     }
 
-    public void setPhone(String phone) {
-        this.phone = phone;
+    public void setDeviceId(Long deviceId) {
+        this.deviceId = deviceId;
     }
 
-    public String getLicenseNo() {
-        return licenseNo;
+    public LocalDateTime getSignInTime() {
+        return signInTime;
     }
 
-    public void setLicenseNo(String licenseNo) {
-        this.licenseNo = licenseNo;
+    public void setSignInTime(LocalDateTime signInTime) {
+        this.signInTime = signInTime;
     }
 
-    public String getPinHash() {
-        return pinHash;
+    public LocalDateTime getSignOutTime() {
+        return signOutTime;
     }
 
-    public void setPinHash(String pinHash) {
-        this.pinHash = pinHash;
+    public void setSignOutTime(LocalDateTime signOutTime) {
+        this.signOutTime = signOutTime;
     }
 
     public Byte getStatus() {
@@ -120,6 +134,14 @@ public class Driver {
 
     public void setStatus(Byte status) {
         this.status = status;
+    }
+
+    public String getClosedReason() {
+        return closedReason;
+    }
+
+    public void setClosedReason(String closedReason) {
+        this.closedReason = closedReason;
     }
 
     public String getRemark() {
