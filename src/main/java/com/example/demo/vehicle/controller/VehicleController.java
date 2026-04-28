@@ -37,9 +37,10 @@ public class VehicleController {
                                                              @RequestParam(required = false) Integer size,
                                                              @RequestParam(required = false) Long enterpriseId,
                                                              @RequestParam(required = false) Long fleetId,
+                                                             @RequestParam(required = false) String keyword,
                                                              @RequestParam(required = false) Byte status,
                                                              Authentication authentication) {
-        return ApiResponse.success(vehicleManagementService.listVehicles(currentUser(authentication), page, size, enterpriseId, fleetId, status));
+        return ApiResponse.success(vehicleManagementService.listVehicles(currentUser(authentication), page, size, enterpriseId, fleetId, keyword, status));
     }
 
     @GetMapping("/{id}")

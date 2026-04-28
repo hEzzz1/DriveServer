@@ -41,6 +41,9 @@ public class Device {
     @Column(name = "last_activated_at")
     private LocalDateTime lastActivatedAt;
 
+    @Column(name = "last_online_at")
+    private LocalDateTime lastOnlineAt;
+
     @Column(name = "token_rotated_at")
     private LocalDateTime tokenRotatedAt;
 
@@ -126,6 +129,14 @@ public class Device {
 
     public void setLastActivatedAt(LocalDateTime lastActivatedAt) {
         this.lastActivatedAt = lastActivatedAt;
+    }
+
+    public LocalDateTime getLastOnlineAt() {
+        return lastOnlineAt;
+    }
+
+    public void setLastOnlineAt(LocalDateTime lastOnlineAt) {
+        this.lastOnlineAt = lastOnlineAt;
     }
 
     public LocalDateTime getTokenRotatedAt() {

@@ -9,6 +9,9 @@ public record VehicleDetailResponseData(
         String plateNumber,
         String vin,
         Byte status,
+        Long boundDeviceId,
+        String boundDeviceCode,
+        String boundDeviceName,
         String remark,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt

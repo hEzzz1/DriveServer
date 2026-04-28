@@ -120,7 +120,7 @@ public class EventAlertOrchestrator {
         createRequest.setResolvedVehicleId(resolution.resolvedVehicleId());
         createRequest.setResolvedDriverId(resolution.resolvedDriverId());
         createRequest.setResolutionStatus(resolution.resolutionStatus().name());
-        createRequest.setConfigVersion(normalizeOptionalText(request.getAlgorithmVer()));
+        createRequest.setConfigVersion(normalizeOptionalText(request.getConfigVersion()));
         createRequest.setRuleId(ruleId);
         createRequest.setRiskLevel(riskLevel);
         createRequest.setRiskScore(scale(riskScore));

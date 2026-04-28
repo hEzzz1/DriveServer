@@ -139,6 +139,24 @@ class FleetManagementIntegrationTest {
     }
 
     @Test
+    void listFleetsShouldSupportKeywordWithinEnterpriseScope() throws Exception {
+        String token = loginAndGetToken("operator-user", "123456");
+
+        mockMvc.perform(get("/api/v1/fleets")
+                        .header("Authorization", "Bearer " + token)
+                        .param("keyword", "A车"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].name").value("A车队"));
+
+        mockMvc.perform(get("/api/v1/fleets")
+                        .header("Authorization", "Bearer " + token)
+                        .param("keyword", "B车"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
     void superAdminShouldUpdateFleetStatus() throws Exception {
         String token = loginAndGetToken("super-admin", "123456");
 

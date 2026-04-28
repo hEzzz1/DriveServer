@@ -45,13 +45,17 @@ public class IngestService {
     }
 
     public IngestEventResponseData ingest(String deviceCode, String deviceToken, IngestEventRequest request) {
-        Device device = deviceService.authenticate(deviceCode, deviceToken).device();
+        Device device = deviceService.authenticateAndTouch(deviceCode, deviceToken).device();
+        if (StringUtils.hasText(request.getDeviceCode()) && !device.getDeviceCode().equals(request.getDeviceCode().trim())) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "deviceCode不匹配");
+        }
 
         String eventId = request.getEventId() == null ? null : request.getEventId().trim();
         if (!StringUtils.hasText(eventId)) {
             throw new BusinessException(ApiCode.INVALID_PARAM, ApiCode.INVALID_PARAM.getMessage());
         }
         request.setEventId(eventId);
+        request.setDeviceCode(device.getDeviceCode());
 
         boolean acquired = eventIdempotencyStore.tryAcquire(eventId, eventIdTtl);
         if (!acquired) {
@@ -62,6 +66,7 @@ public class IngestService {
         try {
             EventOwnershipResolution resolution = drivingSessionService.resolveOwnership(
                     device,
+                    parseOptionalBusinessId(request.getReportedEnterpriseId()),
                     parseOptionalBusinessId(request.getFleetId()),
                     parseOptionalBusinessId(request.getVehicleId()),
                     parseOptionalBusinessId(request.getDriverId()),

@@ -15,6 +15,9 @@ import com.example.demo.driver.repository.DriverRepository;
 import com.example.demo.enterprise.repository.EnterpriseRepository;
 import com.example.demo.fleet.entity.Fleet;
 import com.example.demo.fleet.repository.FleetRepository;
+import com.example.demo.session.entity.DrivingSession;
+import com.example.demo.session.model.SessionStatus;
+import com.example.demo.session.repository.DrivingSessionRepository;
 import com.example.demo.system.service.SystemAuditService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,7 +32,10 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -42,6 +48,7 @@ public class DriverManagementService {
     private final DriverRepository driverRepository;
     private final EnterpriseRepository enterpriseRepository;
     private final FleetRepository fleetRepository;
+    private final DrivingSessionRepository drivingSessionRepository;
     private final BusinessAccessService businessAccessService;
     private final SystemAuditService systemAuditService;
     private final PasswordEncoder passwordEncoder;
@@ -49,12 +56,14 @@ public class DriverManagementService {
     public DriverManagementService(DriverRepository driverRepository,
                                    EnterpriseRepository enterpriseRepository,
                                    FleetRepository fleetRepository,
+                                   DrivingSessionRepository drivingSessionRepository,
                                    BusinessAccessService businessAccessService,
                                    SystemAuditService systemAuditService,
                                    PasswordEncoder passwordEncoder) {
         this.driverRepository = driverRepository;
         this.enterpriseRepository = enterpriseRepository;
         this.fleetRepository = fleetRepository;
+        this.drivingSessionRepository = drivingSessionRepository;
         this.businessAccessService = businessAccessService;
         this.systemAuditService = systemAuditService;
         this.passwordEncoder = passwordEncoder;
@@ -76,18 +85,19 @@ public class DriverManagementService {
         Page<Driver> result = driverRepository.findAll(
                 specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
+        Map<Long, DrivingSession> activeSessions = loadActiveSessions(result.getContent());
         return new DriverPageResponseData(
                 result.getTotalElements(),
                 pageNo,
                 pageSize,
-                result.getContent().stream().map(this::toListItem).toList());
+                result.getContent().stream().map(driver -> toListItem(driver, activeSessions)).toList());
     }
 
     @Transactional(readOnly = true)
     public DriverDetailResponseData getDriver(AuthenticatedUser operator, Long driverId) {
         Driver driver = getDriverEntity(driverId);
         businessAccessService.resolveReadableEnterpriseId(operator, driver.getEnterpriseId());
-        return toDetail(driver);
+        return toDetail(driver, loadActiveSessions(List.of(driver)));
     }
 
     @Transactional
@@ -112,7 +122,7 @@ public class DriverManagementService {
 
         systemAuditService.record(operator, "DRIVER", "CREATE_DRIVER", "DRIVER", String.valueOf(saved.getId()),
                 "SUCCESS", "创建驾驶员", auditDetail(operator, saved.getId(), saved.getEnterpriseId(), null, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadActiveSessions(List.of(saved)));
     }
 
     @Transactional
@@ -133,7 +143,7 @@ public class DriverManagementService {
 
         systemAuditService.record(operator, "DRIVER", "UPDATE_DRIVER", "DRIVER", String.valueOf(saved.getId()),
                 "SUCCESS", "更新驾驶员", auditDetail(operator, saved.getId(), saved.getEnterpriseId(), before, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadActiveSessions(List.of(saved)));
     }
 
     @Transactional
@@ -146,7 +156,7 @@ public class DriverManagementService {
 
         systemAuditService.record(operator, "DRIVER", "UPDATE_DRIVER_STATUS", "DRIVER", String.valueOf(saved.getId()),
                 "SUCCESS", "更新驾驶员状态", auditDetail(operator, saved.getId(), saved.getEnterpriseId(), before, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadActiveSessions(List.of(saved)));
     }
 
     @Transactional
@@ -160,7 +170,7 @@ public class DriverManagementService {
 
         systemAuditService.record(operator, "DRIVER", "REASSIGN_DRIVER_FLEET", "DRIVER", String.valueOf(saved.getId()),
                 "SUCCESS", "调整驾驶员所属车队", auditDetail(operator, saved.getId(), saved.getEnterpriseId(), before, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadActiveSessions(List.of(saved)));
     }
 
     @Transactional
@@ -172,7 +182,7 @@ public class DriverManagementService {
         Driver saved = driverRepository.save(driver);
         systemAuditService.record(operator, "DRIVER", "RESET_DRIVER_PIN", "DRIVER", String.valueOf(saved.getId()),
                 "SUCCESS", "重置驾驶员PIN", auditDetail(operator, saved.getId(), saved.getEnterpriseId(), before, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadActiveSessions(List.of(saved)));
     }
 
     private Specification<Driver> buildSpecification(Long enterpriseId, Long fleetId, String keyword, Byte status) {
@@ -187,6 +197,7 @@ public class DriverManagementService {
             if (StringUtils.hasText(keyword)) {
                 String pattern = "%" + keyword.trim() + "%";
                 predicates.add(cb.or(
+                        cb.like(root.get("driverCode"), pattern),
                         cb.like(root.get("name"), pattern),
                         cb.like(root.get("phone"), pattern),
                         cb.like(root.get("licenseNo"), pattern)));
@@ -228,7 +239,8 @@ public class DriverManagementService {
         }
     }
 
-    private DriverListItemData toListItem(Driver driver) {
+    private DriverListItemData toListItem(Driver driver, Map<Long, DrivingSession> activeSessions) {
+        DrivingSession activeSession = activeSessions.get(driver.getId());
         return new DriverListItemData(
                 driver.getId(),
                 driver.getEnterpriseId(),
@@ -238,12 +250,15 @@ public class DriverManagementService {
                 driver.getPhone(),
                 driver.getLicenseNo(),
                 driver.getStatus(),
+                activeSession != null,
+                activeSession == null ? null : activeSession.getId(),
                 driver.getRemark(),
                 toOffsetDateTime(driver.getCreatedAt()),
                 toOffsetDateTime(driver.getUpdatedAt()));
     }
 
-    private DriverDetailResponseData toDetail(Driver driver) {
+    private DriverDetailResponseData toDetail(Driver driver, Map<Long, DrivingSession> activeSessions) {
+        DrivingSession activeSession = activeSessions.get(driver.getId());
         return new DriverDetailResponseData(
                 driver.getId(),
                 driver.getEnterpriseId(),
@@ -253,9 +268,25 @@ public class DriverManagementService {
                 driver.getPhone(),
                 driver.getLicenseNo(),
                 driver.getStatus(),
+                activeSession != null,
+                activeSession == null ? null : activeSession.getId(),
                 driver.getRemark(),
                 toOffsetDateTime(driver.getCreatedAt()),
                 toOffsetDateTime(driver.getUpdatedAt()));
+    }
+
+    private Map<Long, DrivingSession> loadActiveSessions(Collection<Driver> drivers) {
+        Map<Long, DrivingSession> result = new HashMap<>();
+        if (drivers.isEmpty()) {
+            return result;
+        }
+        List<Long> driverIds = drivers.stream().map(Driver::getId).toList();
+        for (DrivingSession session : drivingSessionRepository.findByStatusAndDriverIdInOrderBySignInTimeDesc(SessionStatus.ACTIVE.getCode(), driverIds)) {
+            if (session.getDriverId() != null) {
+                result.putIfAbsent(session.getDriverId(), session);
+            }
+        }
+        return result;
     }
 
     private Map<String, Object> snapshot(Driver driver) {

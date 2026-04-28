@@ -16,6 +16,12 @@ public class IngestEventRequest {
     private String eventId;
 
     @Size(max = 64)
+    private String deviceCode;
+
+    @Size(max = 64)
+    private String reportedEnterpriseId;
+
+    @Size(max = 64)
     private String fleetId;
 
     @Size(max = 64)
@@ -55,6 +61,9 @@ public class IngestEventRequest {
     @Size(max = 32)
     private String algorithmVer;
 
+    @Size(max = 64)
+    private String configVersion;
+
     @Size(max = 32)
     private String riskLevel;
 
@@ -83,6 +92,22 @@ public class IngestEventRequest {
 
     public void setFleetId(String fleetId) {
         this.fleetId = fleetId;
+    }
+
+    public String getDeviceCode() {
+        return deviceCode;
+    }
+
+    public void setDeviceCode(String deviceCode) {
+        this.deviceCode = deviceCode;
+    }
+
+    public String getReportedEnterpriseId() {
+        return reportedEnterpriseId;
+    }
+
+    public void setReportedEnterpriseId(String reportedEnterpriseId) {
+        this.reportedEnterpriseId = reportedEnterpriseId;
     }
 
     public String getVehicleId() {
@@ -171,6 +196,14 @@ public class IngestEventRequest {
 
     public void setAlgorithmVer(String algorithmVer) {
         this.algorithmVer = algorithmVer;
+    }
+
+    public String getConfigVersion() {
+        return configVersion;
+    }
+
+    public void setConfigVersion(String configVersion) {
+        this.configVersion = configVersion;
     }
 
     public String getRiskLevel() {

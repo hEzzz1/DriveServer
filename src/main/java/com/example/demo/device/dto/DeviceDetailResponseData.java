@@ -12,7 +12,12 @@ public record DeviceDetailResponseData(
         String activationCode,
         Byte status,
         OffsetDateTime lastActivatedAt,
+        OffsetDateTime lastOnlineAt,
         OffsetDateTime tokenRotatedAt,
+        Long currentDriverId,
+        String currentDriverCode,
+        String currentDriverName,
+        Long currentSessionId,
         String remark,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt

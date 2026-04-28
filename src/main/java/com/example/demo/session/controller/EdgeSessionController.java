@@ -30,26 +30,26 @@ public class EdgeSessionController {
     @GetMapping("/drivers/available")
     public ApiResponse<AvailableDriversResponseData> availableDrivers(@RequestHeader(value = "X-Device-Code", required = false) String deviceCode,
                                                                       @RequestHeader(value = "X-Device-Token", required = false) String deviceToken) {
-        return ApiResponse.success(drivingSessionService.listAvailableDrivers(deviceService.authenticate(deviceCode, deviceToken)));
+        return ApiResponse.success(drivingSessionService.listAvailableDrivers(deviceService.authenticateAndTouch(deviceCode, deviceToken)));
     }
 
     @PostMapping("/sessions/sign-in")
     public ApiResponse<SessionCurrentResponseData> signIn(@RequestHeader(value = "X-Device-Code", required = false) String deviceCode,
                                                           @RequestHeader(value = "X-Device-Token", required = false) String deviceToken,
                                                           @Valid @RequestBody SignInSessionRequest request) {
-        return ApiResponse.success(drivingSessionService.signIn(deviceService.authenticate(deviceCode, deviceToken), request));
+        return ApiResponse.success(drivingSessionService.signIn(deviceService.authenticateAndTouch(deviceCode, deviceToken), request));
     }
 
     @PostMapping("/sessions/sign-out")
     public ApiResponse<SessionCurrentResponseData> signOut(@RequestHeader(value = "X-Device-Code", required = false) String deviceCode,
                                                            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken,
                                                            @RequestBody(required = false) SignOutSessionRequest request) {
-        return ApiResponse.success(drivingSessionService.signOut(deviceService.authenticate(deviceCode, deviceToken), request == null ? null : request.remark()));
+        return ApiResponse.success(drivingSessionService.signOut(deviceService.authenticateAndTouch(deviceCode, deviceToken), request == null ? null : request.remark()));
     }
 
     @GetMapping("/sessions/current")
     public ApiResponse<SessionCurrentResponseData> current(@RequestHeader(value = "X-Device-Code", required = false) String deviceCode,
                                                            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken) {
-        return ApiResponse.success(drivingSessionService.current(deviceService.authenticate(deviceCode, deviceToken)));
+        return ApiResponse.success(drivingSessionService.current(deviceService.authenticateAndTouch(deviceCode, deviceToken)));
     }
 }

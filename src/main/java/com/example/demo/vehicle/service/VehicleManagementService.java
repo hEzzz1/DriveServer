@@ -4,6 +4,8 @@ import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.auth.service.BusinessAccessService;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
+import com.example.demo.device.entity.Device;
+import com.example.demo.device.repository.DeviceRepository;
 import com.example.demo.enterprise.repository.EnterpriseRepository;
 import com.example.demo.fleet.entity.Fleet;
 import com.example.demo.fleet.repository.FleetRepository;
@@ -27,7 +29,10 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -38,17 +43,20 @@ public class VehicleManagementService {
     private static final int MAX_SIZE = 100;
 
     private final VehicleRepository vehicleRepository;
+    private final DeviceRepository deviceRepository;
     private final EnterpriseRepository enterpriseRepository;
     private final FleetRepository fleetRepository;
     private final BusinessAccessService businessAccessService;
     private final SystemAuditService systemAuditService;
 
     public VehicleManagementService(VehicleRepository vehicleRepository,
+                                    DeviceRepository deviceRepository,
                                     EnterpriseRepository enterpriseRepository,
                                     FleetRepository fleetRepository,
                                     BusinessAccessService businessAccessService,
                                     SystemAuditService systemAuditService) {
         this.vehicleRepository = vehicleRepository;
+        this.deviceRepository = deviceRepository;
         this.enterpriseRepository = enterpriseRepository;
         this.fleetRepository = fleetRepository;
         this.businessAccessService = businessAccessService;
@@ -56,20 +64,29 @@ public class VehicleManagementService {
     }
 
     @Transactional(readOnly = true)
-    public VehiclePageResponseData listVehicles(AuthenticatedUser operator, Integer page, Integer size, Long enterpriseId, Long fleetId, Byte status) {
+    public VehiclePageResponseData listVehicles(AuthenticatedUser operator,
+                                                Integer page,
+                                                Integer size,
+                                                Long enterpriseId,
+                                                Long fleetId,
+                                                String keyword,
+                                                Byte status) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
         Long readableEnterpriseId = businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
-        Specification<Vehicle> specification = buildSpecification(readableEnterpriseId, fleetId, normalizeStatus(status, true));
+        validateFleetScope(fleetId, readableEnterpriseId);
+        Specification<Vehicle> specification = buildSpecification(readableEnterpriseId, fleetId, keyword, normalizeStatus(status, true));
         Page<Vehicle> result = vehicleRepository.findAll(specification, PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
-        return new VehiclePageResponseData(result.getTotalElements(), pageNo, pageSize, result.getContent().stream().map(this::toListItem).toList());
+        Map<Long, Device> boundDevices = loadBoundDeviceMap(result.getContent());
+        return new VehiclePageResponseData(result.getTotalElements(), pageNo, pageSize,
+                result.getContent().stream().map(vehicle -> toListItem(vehicle, boundDevices)).toList());
     }
 
     @Transactional(readOnly = true)
     public VehicleDetailResponseData getVehicle(AuthenticatedUser operator, Long vehicleId) {
         Vehicle vehicle = getVehicleEntity(vehicleId);
         businessAccessService.resolveReadableEnterpriseId(operator, vehicle.getEnterpriseId());
-        return toDetail(vehicle);
+        return toDetail(vehicle, loadBoundDeviceMap(List.of(vehicle)));
     }
 
     @Transactional
@@ -95,7 +112,7 @@ public class VehicleManagementService {
         Vehicle saved = vehicleRepository.save(vehicle);
         systemAuditService.record(operator, "VEHICLE", "CREATE_VEHICLE", "VEHICLE", String.valueOf(saved.getId()),
                 "SUCCESS", "创建车辆", auditDetail(operator, saved, null, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadBoundDeviceMap(List.of(saved)));
     }
 
     @Transactional
@@ -115,7 +132,7 @@ public class VehicleManagementService {
         Vehicle saved = vehicleRepository.save(vehicle);
         systemAuditService.record(operator, "VEHICLE", "UPDATE_VEHICLE", "VEHICLE", String.valueOf(saved.getId()),
                 "SUCCESS", "更新车辆", auditDetail(operator, saved, before, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadBoundDeviceMap(List.of(saved)));
     }
 
     @Transactional
@@ -127,10 +144,10 @@ public class VehicleManagementService {
         Vehicle saved = vehicleRepository.save(vehicle);
         systemAuditService.record(operator, "VEHICLE", "UPDATE_VEHICLE_STATUS", "VEHICLE", String.valueOf(saved.getId()),
                 "SUCCESS", "更新车辆状态", auditDetail(operator, saved, before, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadBoundDeviceMap(List.of(saved)));
     }
 
-    private Specification<Vehicle> buildSpecification(Long enterpriseId, Long fleetId, Byte status) {
+    private Specification<Vehicle> buildSpecification(Long enterpriseId, Long fleetId, String keyword, Byte status) {
         return (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
             if (enterpriseId != null) {
@@ -138,6 +155,12 @@ public class VehicleManagementService {
             }
             if (fleetId != null) {
                 predicates.add(cb.equal(root.get("fleetId"), fleetId));
+            }
+            if (StringUtils.hasText(keyword)) {
+                String pattern = "%" + keyword.trim() + "%";
+                predicates.add(cb.or(
+                        cb.like(root.get("plateNumber"), pattern),
+                        cb.like(root.get("vin"), pattern)));
             }
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
@@ -157,6 +180,17 @@ public class VehicleManagementService {
         }
     }
 
+    private void validateFleetScope(Long fleetId, Long enterpriseId) {
+        if (fleetId == null) {
+            return;
+        }
+        Fleet fleet = fleetRepository.findById(fleetId)
+                .orElseThrow(() -> new BusinessException(ApiCode.INVALID_PARAM, "fleetId不存在"));
+        if (enterpriseId != null && !enterpriseId.equals(fleet.getEnterpriseId())) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
+    }
+
     private void validateFleetBelongsToEnterprise(Long fleetId, Long enterpriseId) {
         Fleet fleet = fleetRepository.findById(fleetId)
                 .orElseThrow(() -> new BusinessException(ApiCode.INVALID_PARAM, "fleetId不存在"));
@@ -165,14 +199,38 @@ public class VehicleManagementService {
         }
     }
 
-    private VehicleListItemData toListItem(Vehicle vehicle) {
+    private VehicleListItemData toListItem(Vehicle vehicle, Map<Long, Device> boundDevices) {
+        Device boundDevice = boundDevices.get(vehicle.getId());
         return new VehicleListItemData(vehicle.getId(), vehicle.getEnterpriseId(), vehicle.getFleetId(), vehicle.getPlateNumber(),
-                vehicle.getVin(), vehicle.getStatus(), vehicle.getRemark(), toOffsetDateTime(vehicle.getCreatedAt()), toOffsetDateTime(vehicle.getUpdatedAt()));
+                vehicle.getVin(), vehicle.getStatus(),
+                boundDevice == null ? null : boundDevice.getId(),
+                boundDevice == null ? null : boundDevice.getDeviceCode(),
+                boundDevice == null ? null : boundDevice.getDeviceName(),
+                vehicle.getRemark(), toOffsetDateTime(vehicle.getCreatedAt()), toOffsetDateTime(vehicle.getUpdatedAt()));
     }
 
-    private VehicleDetailResponseData toDetail(Vehicle vehicle) {
+    private VehicleDetailResponseData toDetail(Vehicle vehicle, Map<Long, Device> boundDevices) {
+        Device boundDevice = boundDevices.get(vehicle.getId());
         return new VehicleDetailResponseData(vehicle.getId(), vehicle.getEnterpriseId(), vehicle.getFleetId(), vehicle.getPlateNumber(),
-                vehicle.getVin(), vehicle.getStatus(), vehicle.getRemark(), toOffsetDateTime(vehicle.getCreatedAt()), toOffsetDateTime(vehicle.getUpdatedAt()));
+                vehicle.getVin(), vehicle.getStatus(),
+                boundDevice == null ? null : boundDevice.getId(),
+                boundDevice == null ? null : boundDevice.getDeviceCode(),
+                boundDevice == null ? null : boundDevice.getDeviceName(),
+                vehicle.getRemark(), toOffsetDateTime(vehicle.getCreatedAt()), toOffsetDateTime(vehicle.getUpdatedAt()));
+    }
+
+    private Map<Long, Device> loadBoundDeviceMap(Collection<Vehicle> vehicles) {
+        Map<Long, Device> result = new HashMap<>();
+        if (vehicles.isEmpty()) {
+            return result;
+        }
+        List<Long> vehicleIds = vehicles.stream().map(Vehicle::getId).toList();
+        for (Device device : deviceRepository.findByVehicleIdInOrderByStatusDescIdDesc(vehicleIds)) {
+            if (device.getVehicleId() != null) {
+                result.putIfAbsent(device.getVehicleId(), device);
+            }
+        }
+        return result;
     }
 
     private Map<String, Object> snapshot(Vehicle vehicle) {

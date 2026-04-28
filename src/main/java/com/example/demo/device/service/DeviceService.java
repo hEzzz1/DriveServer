@@ -16,6 +16,13 @@ import com.example.demo.device.dto.RotateDeviceTokenResponseData;
 import com.example.demo.device.dto.UpdateDeviceRequest;
 import com.example.demo.device.entity.Device;
 import com.example.demo.device.repository.DeviceRepository;
+import com.example.demo.enterprise.entity.Enterprise;
+import com.example.demo.enterprise.repository.EnterpriseRepository;
+import com.example.demo.fleet.entity.Fleet;
+import com.example.demo.fleet.repository.FleetRepository;
+import com.example.demo.rule.service.EdgeConfigVersionResolver;
+import com.example.demo.driver.entity.Driver;
+import com.example.demo.driver.repository.DriverRepository;
 import com.example.demo.session.entity.DrivingSession;
 import com.example.demo.session.repository.DrivingSessionRepository;
 import com.example.demo.session.model.SessionStatus;
@@ -34,7 +41,10 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -48,19 +58,31 @@ public class DeviceService {
     private final DeviceRepository deviceRepository;
     private final VehicleRepository vehicleRepository;
     private final DrivingSessionRepository drivingSessionRepository;
+    private final EnterpriseRepository enterpriseRepository;
+    private final FleetRepository fleetRepository;
+    private final DriverRepository driverRepository;
     private final BusinessAccessService businessAccessService;
     private final SystemAuditService systemAuditService;
+    private final EdgeConfigVersionResolver edgeConfigVersionResolver;
 
     public DeviceService(DeviceRepository deviceRepository,
                          VehicleRepository vehicleRepository,
                          DrivingSessionRepository drivingSessionRepository,
+                         EnterpriseRepository enterpriseRepository,
+                         FleetRepository fleetRepository,
+                         DriverRepository driverRepository,
                          BusinessAccessService businessAccessService,
-                         SystemAuditService systemAuditService) {
+                         SystemAuditService systemAuditService,
+                         EdgeConfigVersionResolver edgeConfigVersionResolver) {
         this.deviceRepository = deviceRepository;
         this.vehicleRepository = vehicleRepository;
         this.drivingSessionRepository = drivingSessionRepository;
+        this.enterpriseRepository = enterpriseRepository;
+        this.fleetRepository = fleetRepository;
+        this.driverRepository = driverRepository;
         this.businessAccessService = businessAccessService;
         this.systemAuditService = systemAuditService;
+        this.edgeConfigVersionResolver = edgeConfigVersionResolver;
     }
 
     @Transactional(readOnly = true)
@@ -70,14 +92,16 @@ public class DeviceService {
         Long readableEnterpriseId = businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
         Specification<Device> specification = buildSpecification(readableEnterpriseId, fleetId, vehicleId);
         Page<Device> result = deviceRepository.findAll(specification, PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
-        return new DevicePageResponseData(result.getTotalElements(), pageNo, pageSize, result.getContent().stream().map(this::toListItem).toList());
+        DeviceViewRefs refs = loadDeviceViewRefs(result.getContent());
+        return new DevicePageResponseData(result.getTotalElements(), pageNo, pageSize,
+                result.getContent().stream().map(device -> toListItem(device, refs)).toList());
     }
 
     @Transactional(readOnly = true)
     public DeviceDetailResponseData getDevice(AuthenticatedUser operator, Long deviceId) {
         Device device = getDeviceEntity(deviceId);
         businessAccessService.resolveReadableEnterpriseId(operator, device.getEnterpriseId());
-        return toDetail(device);
+        return toDetail(device, loadDeviceViewRefs(List.of(device)));
     }
 
     @Transactional
@@ -104,7 +128,7 @@ public class DeviceService {
         Device saved = deviceRepository.save(device);
         systemAuditService.record(operator, "DEVICE", "CREATE_DEVICE", "DEVICE", String.valueOf(saved.getId()),
                 "SUCCESS", "创建设备", auditDetail(operator, saved, null, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadDeviceViewRefs(List.of(saved)));
     }
 
     @Transactional
@@ -118,7 +142,7 @@ public class DeviceService {
         Device saved = deviceRepository.save(device);
         systemAuditService.record(operator, "DEVICE", "UPDATE_DEVICE", "DEVICE", String.valueOf(saved.getId()),
                 "SUCCESS", "更新设备", auditDetail(operator, saved, before, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadDeviceViewRefs(List.of(saved)));
     }
 
     @Transactional
@@ -130,7 +154,7 @@ public class DeviceService {
         Device saved = deviceRepository.save(device);
         systemAuditService.record(operator, "DEVICE", "UPDATE_DEVICE_STATUS", "DEVICE", String.valueOf(saved.getId()),
                 "SUCCESS", "更新设备状态", auditDetail(operator, saved, before, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadDeviceViewRefs(List.of(saved)));
     }
 
     @Transactional
@@ -147,7 +171,7 @@ public class DeviceService {
         Device saved = deviceRepository.save(device);
         systemAuditService.record(operator, "DEVICE", "REASSIGN_DEVICE_VEHICLE", "DEVICE", String.valueOf(saved.getId()),
                 "SUCCESS", "调整设备绑定车辆", auditDetail(operator, saved, before, snapshot(saved)));
-        return toDetail(saved);
+        return toDetail(saved, loadDeviceViewRefs(List.of(saved)));
     }
 
     @Transactional
@@ -184,24 +208,47 @@ public class DeviceService {
                 device.getEnterpriseId(), device.getFleetId(), device.getVehicleId(), toOffsetDateTime(now));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public DeviceContextResponseData getContext(String deviceCode, String deviceToken) {
-        Device device = authenticate(deviceCode, deviceToken).device();
+        Device device = authenticateAndTouch(deviceCode, deviceToken).device();
+        Enterprise enterprise = enterpriseRepository.findById(device.getEnterpriseId()).orElse(null);
+        Fleet fleet = fleetRepository.findById(device.getFleetId()).orElse(null);
+        Vehicle vehicle = vehicleRepository.findById(device.getVehicleId()).orElse(null);
         DrivingSession session = drivingSessionRepository.findFirstByDeviceIdAndStatusOrderBySignInTimeDesc(device.getId(), SessionStatus.ACTIVE.getCode()).orElse(null);
+        Driver driver = session == null ? null : driverRepository.findById(session.getDriverId()).orElse(null);
         return new DeviceContextResponseData(
                 device.getId(),
                 device.getDeviceCode(),
                 device.getDeviceName(),
                 device.getEnterpriseId(),
+                enterprise == null ? null : enterprise.getName(),
                 device.getFleetId(),
+                fleet == null ? null : fleet.getName(),
                 device.getVehicleId(),
+                vehicle == null ? null : vehicle.getPlateNumber(),
+                driver == null ? null : driver.getId(),
+                driver == null ? null : driver.getDriverCode(),
+                driver == null ? null : driver.getName(),
                 session == null ? null : session.getId(),
                 session == null ? null : session.getSessionNo(),
-                session == null ? null : toOffsetDateTime(session.getSignInTime()));
+                session == null ? null : toOffsetDateTime(session.getSignInTime()),
+                session == null ? null : session.getStatus(),
+                edgeConfigVersionResolver.resolveCurrentVersion());
     }
 
     @Transactional(readOnly = true)
     public DeviceAuthContext authenticate(String deviceCode, String deviceToken) {
+        return new DeviceAuthContext(authenticateDevice(deviceCode, deviceToken));
+    }
+
+    @Transactional
+    public DeviceAuthContext authenticateAndTouch(String deviceCode, String deviceToken) {
+        Device device = authenticateDevice(deviceCode, deviceToken);
+        touchOnlineAndActiveSession(device);
+        return new DeviceAuthContext(device);
+    }
+
+    private Device authenticateDevice(String deviceCode, String deviceToken) {
         if (!StringUtils.hasText(deviceCode) || !StringUtils.hasText(deviceToken)) {
             throw new BusinessException(ApiCode.UNAUTHORIZED, "设备认证失败");
         }
@@ -210,7 +257,18 @@ public class DeviceService {
         if (device.getStatus() == null || device.getStatus() == (byte) 0) {
             throw new BusinessException(ApiCode.FORBIDDEN, "设备已禁用");
         }
-        return new DeviceAuthContext(device);
+        return device;
+    }
+
+    private void touchOnlineAndActiveSession(Device device) {
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        device.setLastOnlineAt(now);
+        deviceRepository.save(device);
+        drivingSessionRepository.findFirstByDeviceIdAndStatusOrderBySignInTimeDesc(device.getId(), SessionStatus.ACTIVE.getCode())
+                .ifPresent(session -> {
+                    session.setLastHeartbeatAt(now);
+                    drivingSessionRepository.save(session);
+                });
     }
 
     private Specification<Device> buildSpecification(Long enterpriseId, Long fleetId, Long vehicleId) {
@@ -239,18 +297,54 @@ public class DeviceService {
                 .orElseThrow(() -> new BusinessException(ApiCode.INVALID_PARAM, "vehicleId不存在"));
     }
 
-    private DeviceListItemData toListItem(Device device) {
+    private DeviceListItemData toListItem(Device device, DeviceViewRefs refs) {
+        DrivingSession activeSession = refs.activeSessionsByDeviceId().get(device.getId());
+        Driver currentDriver = activeSession == null ? null : refs.driversById().get(activeSession.getDriverId());
         return new DeviceListItemData(device.getId(), device.getEnterpriseId(), device.getFleetId(), device.getVehicleId(),
                 device.getDeviceCode(), device.getDeviceName(), device.getActivationCode(), device.getStatus(),
-                toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getTokenRotatedAt()), device.getRemark(),
+                toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getLastOnlineAt()), toOffsetDateTime(device.getTokenRotatedAt()),
+                currentDriver == null ? null : currentDriver.getId(),
+                currentDriver == null ? null : currentDriver.getDriverCode(),
+                currentDriver == null ? null : currentDriver.getName(),
+                activeSession == null ? null : activeSession.getId(),
+                device.getRemark(),
                 toOffsetDateTime(device.getCreatedAt()), toOffsetDateTime(device.getUpdatedAt()));
     }
 
-    private DeviceDetailResponseData toDetail(Device device) {
+    private DeviceDetailResponseData toDetail(Device device, DeviceViewRefs refs) {
+        DrivingSession activeSession = refs.activeSessionsByDeviceId().get(device.getId());
+        Driver currentDriver = activeSession == null ? null : refs.driversById().get(activeSession.getDriverId());
         return new DeviceDetailResponseData(device.getId(), device.getEnterpriseId(), device.getFleetId(), device.getVehicleId(),
                 device.getDeviceCode(), device.getDeviceName(), device.getActivationCode(), device.getStatus(),
-                toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getTokenRotatedAt()), device.getRemark(),
+                toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getLastOnlineAt()), toOffsetDateTime(device.getTokenRotatedAt()),
+                currentDriver == null ? null : currentDriver.getId(),
+                currentDriver == null ? null : currentDriver.getDriverCode(),
+                currentDriver == null ? null : currentDriver.getName(),
+                activeSession == null ? null : activeSession.getId(),
+                device.getRemark(),
                 toOffsetDateTime(device.getCreatedAt()), toOffsetDateTime(device.getUpdatedAt()));
+    }
+
+    private DeviceViewRefs loadDeviceViewRefs(Collection<Device> devices) {
+        if (devices.isEmpty()) {
+            return new DeviceViewRefs(Map.of(), Map.of());
+        }
+        List<Long> deviceIds = devices.stream().map(Device::getId).toList();
+        Map<Long, DrivingSession> activeSessionsByDeviceId = new HashMap<>();
+        for (DrivingSession session : drivingSessionRepository.findByStatusAndDeviceIdInOrderBySignInTimeDesc(SessionStatus.ACTIVE.getCode(), deviceIds)) {
+            if (session.getDeviceId() != null) {
+                activeSessionsByDeviceId.putIfAbsent(session.getDeviceId(), session);
+            }
+        }
+
+        List<Long> driverIds = activeSessionsByDeviceId.values().stream().map(DrivingSession::getDriverId).toList();
+        Map<Long, Driver> driversById = new HashMap<>();
+        for (Driver driver : driverRepository.findAllById(driverIds)) {
+            if (driver.getId() != null) {
+                driversById.put(driver.getId(), driver);
+            }
+        }
+        return new DeviceViewRefs(activeSessionsByDeviceId, driversById);
     }
 
     private Map<String, Object> snapshot(Device device) {
@@ -262,6 +356,7 @@ public class DeviceService {
         snapshot.put("deviceCode", device.getDeviceCode());
         snapshot.put("deviceName", device.getDeviceName());
         snapshot.put("activationCode", device.getActivationCode());
+        snapshot.put("lastOnlineAt", toOffsetDateTime(device.getLastOnlineAt()));
         snapshot.put("status", device.getStatus());
         return snapshot;
     }
@@ -325,5 +420,11 @@ public class DeviceService {
             throw new BusinessException(ApiCode.INVALID_PARAM, "size必须大于等于1");
         }
         return Math.min(size, MAX_SIZE);
+    }
+
+    private record DeviceViewRefs(
+            Map<Long, DrivingSession> activeSessionsByDeviceId,
+            Map<Long, Driver> driversById
+    ) {
     }
 }

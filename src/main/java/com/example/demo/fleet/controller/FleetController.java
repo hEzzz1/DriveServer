@@ -36,8 +36,9 @@ public class FleetController {
     public ApiResponse<FleetPageResponseData> listFleets(@RequestParam(required = false) Integer page,
                                                          @RequestParam(required = false) Integer size,
                                                          @RequestParam(required = false) Long enterpriseId,
+                                                         @RequestParam(required = false) String keyword,
                                                          Authentication authentication) {
-        return ApiResponse.success(fleetManagementService.listFleets(currentUser(authentication), page, size, enterpriseId));
+        return ApiResponse.success(fleetManagementService.listFleets(currentUser(authentication), page, size, enterpriseId, keyword));
     }
 
     @GetMapping("/{id}")

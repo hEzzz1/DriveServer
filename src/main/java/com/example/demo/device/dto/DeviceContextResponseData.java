@@ -7,10 +7,18 @@ public record DeviceContextResponseData(
         String deviceCode,
         String deviceName,
         Long enterpriseId,
+        String enterpriseName,
         Long fleetId,
+        String fleetName,
         Long vehicleId,
+        String vehiclePlateNumber,
+        Long currentDriverId,
+        String currentDriverCode,
+        String currentDriverName,
         Long currentSessionId,
         String currentSessionNo,
-        OffsetDateTime currentSessionSignInTime
+        OffsetDateTime currentSessionSignInTime,
+        Byte currentSessionStatus,
+        String configVersion
 ) {
 }

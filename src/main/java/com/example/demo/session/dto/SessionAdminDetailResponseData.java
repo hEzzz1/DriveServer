@@ -2,8 +2,8 @@ package com.example.demo.session.dto;
 
 import java.time.OffsetDateTime;
 
-public record SessionCurrentResponseData(
-        Long sessionId,
+public record SessionAdminDetailResponseData(
+        Long id,
         String sessionNo,
         Long enterpriseId,
         String enterpriseName,
@@ -21,6 +21,8 @@ public record SessionCurrentResponseData(
         Byte status,
         String closedReason,
         String remark,
-        String configVersion
+        OffsetDateTime lastHeartbeatAt,
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt
 ) {
 }

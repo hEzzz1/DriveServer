@@ -54,11 +54,12 @@ public class FleetManagementService {
     public FleetPageResponseData listFleets(AuthenticatedUser operator,
                                             Integer page,
                                             Integer size,
-                                            Long enterpriseId) {
+                                            Long enterpriseId,
+                                            String keyword) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
         Long readableEnterpriseId = businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
-        Specification<Fleet> specification = buildSpecification(readableEnterpriseId);
+        Specification<Fleet> specification = buildSpecification(readableEnterpriseId, keyword);
         Page<Fleet> result = fleetRepository.findAll(
                 specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
@@ -131,11 +132,14 @@ public class FleetManagementService {
         return toDetail(saved);
     }
 
-    private Specification<Fleet> buildSpecification(Long enterpriseId) {
+    private Specification<Fleet> buildSpecification(Long enterpriseId, String keyword) {
         return (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
             if (enterpriseId != null) {
                 predicates.add(cb.equal(root.get("enterpriseId"), enterpriseId));
+            }
+            if (StringUtils.hasText(keyword)) {
+                predicates.add(cb.like(root.get("name"), "%" + keyword.trim() + "%"));
             }
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
         };

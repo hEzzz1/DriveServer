@@ -4,6 +4,8 @@ import com.example.demo.device.entity.Device;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface DeviceRepository extends JpaRepository<Device, Long>, JpaSpecificationExecutor<Device> {
@@ -12,4 +14,6 @@ public interface DeviceRepository extends JpaRepository<Device, Long>, JpaSpecif
     Optional<Device> findByDeviceCode(String deviceCode);
 
     Optional<Device> findByDeviceCodeAndDeviceToken(String deviceCode, String deviceToken);
+
+    List<Device> findByVehicleIdInOrderByStatusDescIdDesc(Collection<Long> vehicleIds);
 }

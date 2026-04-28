@@ -38,6 +38,9 @@ public class DrivingSession {
     @Column(name = "sign_in_time", nullable = false)
     private LocalDateTime signInTime;
 
+    @Column(name = "last_heartbeat_at")
+    private LocalDateTime lastHeartbeatAt;
+
     @Column(name = "sign_out_time")
     private LocalDateTime signOutTime;
 
@@ -118,6 +121,14 @@ public class DrivingSession {
 
     public void setSignInTime(LocalDateTime signInTime) {
         this.signInTime = signInTime;
+    }
+
+    public LocalDateTime getLastHeartbeatAt() {
+        return lastHeartbeatAt;
+    }
+
+    public void setLastHeartbeatAt(LocalDateTime lastHeartbeatAt) {
+        this.lastHeartbeatAt = lastHeartbeatAt;
     }
 
     public LocalDateTime getSignOutTime() {

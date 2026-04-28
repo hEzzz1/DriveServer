@@ -11,6 +11,8 @@ public record DriverDetailResponseData(
         String phone,
         String licenseNo,
         Byte status,
+        boolean hasActiveSession,
+        Long activeSessionId,
         String remark,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
