@@ -1,4 +1,4 @@
-package com.example.demo.enterprise;
+package com.example.demo.driver;
 
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
@@ -7,8 +7,12 @@ import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
+import com.example.demo.driver.entity.Driver;
+import com.example.demo.driver.repository.DriverRepository;
 import com.example.demo.enterprise.entity.Enterprise;
 import com.example.demo.enterprise.repository.EnterpriseRepository;
+import com.example.demo.fleet.entity.Fleet;
+import com.example.demo.fleet.repository.FleetRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-class EnterpriseManagementIntegrationTest {
+class DriverManagementIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -51,101 +55,110 @@ class EnterpriseManagementIntegrationTest {
     private EnterpriseRepository enterpriseRepository;
 
     @Autowired
+    private FleetRepository fleetRepository;
+
+    @Autowired
+    private DriverRepository driverRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     private Enterprise enterpriseA;
     private Enterprise enterpriseB;
-    private UserAccount superAdminUser;
-    private UserAccount sysAdminUser;
-    private UserAccount enterpriseAdminUser;
+    private Fleet fleetA1;
+    private Fleet fleetA2;
+    private Fleet fleetB1;
+    private Driver driverA;
 
     @BeforeEach
     void setUp() {
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
+        driverRepository.deleteAll();
+        fleetRepository.deleteAll();
         enterpriseRepository.deleteAll();
 
         enterpriseA = saveEnterprise("ENT-A", "企业A", 1);
         enterpriseB = saveEnterprise("ENT-B", "企业B", 1);
+        fleetA1 = saveFleet(enterpriseA.getId(), "A车队1", 1);
+        fleetA2 = saveFleet(enterpriseA.getId(), "A车队2", 1);
+        fleetB1 = saveFleet(enterpriseB.getId(), "B车队1", 1);
+        driverA = saveDriver(enterpriseA.getId(), fleetA1.getId(), "张三", "13800000000", "LIC-A", 1);
 
         Role superAdmin = saveRole("SUPER_ADMIN", "超级管理员");
-        Role sysAdmin = saveRole("SYS_ADMIN", "系统管理员");
         Role enterpriseAdmin = saveRole("ENTERPRISE_ADMIN", "企业管理员");
+        Role analyst = saveRole("ANALYST", "分析员");
 
-        superAdminUser = saveUser("super-admin", "123456", 1, null);
-        sysAdminUser = saveUser("sys-admin", "123456", 1, null);
-        enterpriseAdminUser = saveUser("enterprise-admin", "123456", 1, enterpriseA.getId());
+        UserAccount superAdminUser = saveUser("super-admin", "123456", 1, null);
+        UserAccount enterpriseAdminUser = saveUser("enterprise-admin", "123456", 1, enterpriseA.getId());
+        UserAccount analystUser = saveUser("analyst-user", "123456", 1, enterpriseA.getId());
 
         bindUserRole(superAdminUser.getId(), superAdmin.getId());
-        bindUserRole(sysAdminUser.getId(), sysAdmin.getId());
         bindUserRole(enterpriseAdminUser.getId(), enterpriseAdmin.getId());
+        bindUserRole(analystUser.getId(), analyst.getId());
     }
 
     @Test
-    void superAdminShouldManageEnterprises() throws Exception {
-        String token = loginAndGetToken("super-admin", "123456");
-
-        mockMvc.perform(post("/api/v1/enterprises")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "code": "ENT-C",
-                                  "name": "企业C",
-                                  "remark": "测试企业"
-                                }
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.code").value("ENT-C"))
-                .andExpect(jsonPath("$.data.name").value("企业C"));
-
-        mockMvc.perform(put("/api/v1/enterprises/{id}/status", enterpriseB.getId())
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "status": 0
-                                }
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value(0));
-    }
-
-    @Test
-    void sysAdminShouldNotParticipateEnterpriseMasterData() throws Exception {
-        String token = loginAndGetToken("sys-admin", "123456");
-
-        mockMvc.perform(get("/api/v1/enterprises")
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value(40301));
-
-        mockMvc.perform(post("/api/v1/enterprises")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "code": "ENT-X",
-                                  "name": "企业X"
-                                }
-                                """))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value(40301));
-    }
-
-    @Test
-    void enterpriseAdminShouldOnlyReadOwnEnterprise() throws Exception {
+    void createDriverShouldRejectCrossEnterpriseFleetBinding() throws Exception {
         String token = loginAndGetToken("enterprise-admin", "123456");
 
-        mockMvc.perform(get("/api/v1/enterprises")
+        mockMvc.perform(post("/api/v1/drivers")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "enterpriseId": %d,
+                                  "fleetId": %d,
+                                  "name": "李四",
+                                  "phone": "13900000000",
+                                  "licenseNo": "LIC-B"
+                                }
+                                """.formatted(enterpriseA.getId(), fleetB1.getId())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40001));
+    }
+
+    @Test
+    void reassignDriverShouldStayWithinSameEnterprise() throws Exception {
+        String token = loginAndGetToken("enterprise-admin", "123456");
+
+        mockMvc.perform(put("/api/v1/drivers/{id}/fleet", driverA.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fleetId": %d
+                                }
+                                """.formatted(fleetA2.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fleetId").value(fleetA2.getId()));
+
+        mockMvc.perform(put("/api/v1/drivers/{id}/fleet", driverA.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fleetId": %d
+                                }
+                                """.formatted(fleetB1.getId())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40001));
+    }
+
+    @Test
+    void analystShouldReadOwnEnterpriseDriversOnly() throws Exception {
+        String token = loginAndGetToken("analyst-user", "123456");
+
+        mockMvc.perform(get("/api/v1/drivers")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1))
-                .andExpect(jsonPath("$.data.items[0].id").value(enterpriseA.getId()));
+                .andExpect(jsonPath("$.data.items[0].id").value(driverA.getId()));
 
-        mockMvc.perform(get("/api/v1/enterprises/{id}", enterpriseB.getId())
-                        .header("Authorization", "Bearer " + token))
+        mockMvc.perform(get("/api/v1/drivers")
+                        .header("Authorization", "Bearer " + token)
+                        .param("enterpriseId", String.valueOf(enterpriseB.getId())))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(40301));
     }
@@ -158,6 +171,29 @@ class EnterpriseManagementIntegrationTest {
         enterprise.setCreatedAt(LocalDateTime.now());
         enterprise.setUpdatedAt(LocalDateTime.now());
         return enterpriseRepository.save(enterprise);
+    }
+
+    private Fleet saveFleet(Long enterpriseId, String name, int status) {
+        Fleet fleet = new Fleet();
+        fleet.setEnterpriseId(enterpriseId);
+        fleet.setName(name);
+        fleet.setStatus((byte) status);
+        fleet.setCreatedAt(LocalDateTime.now());
+        fleet.setUpdatedAt(LocalDateTime.now());
+        return fleetRepository.save(fleet);
+    }
+
+    private Driver saveDriver(Long enterpriseId, Long fleetId, String name, String phone, String licenseNo, int status) {
+        Driver driver = new Driver();
+        driver.setEnterpriseId(enterpriseId);
+        driver.setFleetId(fleetId);
+        driver.setName(name);
+        driver.setPhone(phone);
+        driver.setLicenseNo(licenseNo);
+        driver.setStatus((byte) status);
+        driver.setCreatedAt(LocalDateTime.now());
+        driver.setUpdatedAt(LocalDateTime.now());
+        return driverRepository.save(driver);
     }
 
     private Role saveRole(String roleCode, String roleName) {

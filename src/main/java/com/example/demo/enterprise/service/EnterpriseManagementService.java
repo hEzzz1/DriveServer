@@ -1,8 +1,6 @@
 package com.example.demo.enterprise.service;
 
-import com.example.demo.auth.entity.UserAccount;
-import com.example.demo.auth.model.RoleCode;
-import com.example.demo.auth.repository.UserAccountRepository;
+import com.example.demo.auth.service.BusinessAccessService;
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
@@ -37,14 +35,14 @@ public class EnterpriseManagementService {
     private static final int MAX_SIZE = 100;
 
     private final EnterpriseRepository enterpriseRepository;
-    private final UserAccountRepository userAccountRepository;
+    private final BusinessAccessService businessAccessService;
     private final SystemAuditService systemAuditService;
 
     public EnterpriseManagementService(EnterpriseRepository enterpriseRepository,
-                                       UserAccountRepository userAccountRepository,
+                                       BusinessAccessService businessAccessService,
                                        SystemAuditService systemAuditService) {
         this.enterpriseRepository = enterpriseRepository;
-        this.userAccountRepository = userAccountRepository;
+        this.businessAccessService = businessAccessService;
         this.systemAuditService = systemAuditService;
     }
 
@@ -53,11 +51,13 @@ public class EnterpriseManagementService {
                                                       Integer page,
                                                       Integer size,
                                                       String keyword,
-                                                      Boolean enabled) {
-        UserAccount currentUser = getOperatorAccount(operator);
+                                                      Byte status) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
-        Specification<Enterprise> specification = buildSpecification(operator, currentUser, keyword, enabled);
+        Specification<Enterprise> specification = buildSpecification(
+                keyword,
+                normalizeStatus(status, true),
+                businessAccessService.resolveReadableEnterpriseId(operator, null));
         Page<Enterprise> result = enterpriseRepository.findAll(
                 specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
@@ -71,9 +71,8 @@ public class EnterpriseManagementService {
 
     @Transactional(readOnly = true)
     public EnterpriseDetailResponseData getEnterprise(AuthenticatedUser operator, Long enterpriseId) {
-        UserAccount currentUser = getOperatorAccount(operator);
         Enterprise enterprise = getEnterpriseEntity(enterpriseId);
-        assertCanRead(operator, currentUser, enterprise);
+        businessAccessService.resolveReadableEnterpriseId(operator, enterprise.getId());
         return toDetail(enterprise);
     }
 
@@ -89,8 +88,6 @@ public class EnterpriseManagementService {
         enterprise.setCode(code);
         enterprise.setName(normalizeRequired(request.name(), "name不能为空"));
         enterprise.setStatus((byte) 1);
-        enterprise.setContactName(normalizeOptional(request.contactName()));
-        enterprise.setContactPhone(normalizeOptional(request.contactPhone()));
         enterprise.setRemark(normalizeOptional(request.remark()));
         enterprise.setCreatedAt(LocalDateTime.now(ZoneOffset.UTC));
         enterprise.setUpdatedAt(LocalDateTime.now(ZoneOffset.UTC));
@@ -113,8 +110,6 @@ public class EnterpriseManagementService {
 
         enterprise.setCode(code);
         enterprise.setName(normalizeRequired(request.name(), "name不能为空"));
-        enterprise.setContactName(normalizeOptional(request.contactName()));
-        enterprise.setContactPhone(normalizeOptional(request.contactPhone()));
         enterprise.setRemark(normalizeOptional(request.remark()));
         Enterprise saved = enterpriseRepository.save(enterprise);
 
@@ -124,14 +119,11 @@ public class EnterpriseManagementService {
     }
 
     @Transactional
-    public EnterpriseDetailResponseData updateStatus(AuthenticatedUser operator, Long enterpriseId, Boolean enabled) {
+    public EnterpriseDetailResponseData updateStatus(AuthenticatedUser operator, Long enterpriseId, Byte status) {
         assertSuperAdmin(operator);
-        if (enabled == null) {
-            throw new BusinessException(ApiCode.INVALID_PARAM, "enabled不能为空");
-        }
         Enterprise enterprise = getEnterpriseEntity(enterpriseId);
         Map<String, Object> before = snapshot(enterprise);
-        enterprise.setStatus(Boolean.TRUE.equals(enabled) ? (byte) 1 : (byte) 0);
+        enterprise.setStatus(normalizeStatus(status, false));
         Enterprise saved = enterpriseRepository.save(enterprise);
 
         systemAuditService.record(operator, "ENTERPRISE", "UPDATE_ENTERPRISE_STATUS", "ENTERPRISE", String.valueOf(saved.getId()),
@@ -139,14 +131,11 @@ public class EnterpriseManagementService {
         return toDetail(saved);
     }
 
-    private Specification<Enterprise> buildSpecification(AuthenticatedUser operator,
-                                                         UserAccount currentUser,
-                                                         String keyword,
-                                                         Boolean enabled) {
+    private Specification<Enterprise> buildSpecification(String keyword, Byte status, Long readableEnterpriseId) {
         return (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
-            if (isEnterpriseAdmin(operator)) {
-                predicates.add(cb.equal(root.get("id"), requireEnterpriseId(currentUser)));
+            if (readableEnterpriseId != null) {
+                predicates.add(cb.equal(root.get("id"), readableEnterpriseId));
             }
             if (StringUtils.hasText(keyword)) {
                 String pattern = "%" + keyword.trim() + "%";
@@ -154,8 +143,8 @@ public class EnterpriseManagementService {
                         cb.like(root.get("code"), pattern),
                         cb.like(root.get("name"), pattern)));
             }
-            if (enabled != null) {
-                predicates.add(cb.equal(root.get("status"), Boolean.TRUE.equals(enabled) ? (byte) 1 : (byte) 0));
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
             }
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
         };
@@ -166,37 +155,10 @@ public class EnterpriseManagementService {
                 .orElseThrow(() -> new BusinessException(ApiCode.NOT_FOUND, ApiCode.NOT_FOUND.getMessage()));
     }
 
-    private UserAccount getOperatorAccount(AuthenticatedUser operator) {
-        return userAccountRepository.findById(operator.getUserId())
-                .orElseThrow(() -> new BusinessException(ApiCode.UNAUTHORIZED, ApiCode.UNAUTHORIZED.getMessage()));
-    }
-
-    private void assertCanRead(AuthenticatedUser operator, UserAccount currentUser, Enterprise enterprise) {
-        if (!isEnterpriseAdmin(operator)) {
-            return;
-        }
-        if (!enterprise.getId().equals(requireEnterpriseId(currentUser))) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
-        }
-    }
-
     private void assertSuperAdmin(AuthenticatedUser operator) {
-        if (!operator.getRoles().contains(RoleCode.SUPER_ADMIN.name())) {
+        if (!businessAccessService.isSuperAdmin(operator)) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
-    }
-
-    private boolean isEnterpriseAdmin(AuthenticatedUser operator) {
-        return operator.getRoles().contains(RoleCode.ENTERPRISE_ADMIN.name())
-                && !operator.getRoles().contains(RoleCode.SUPER_ADMIN.name())
-                && !operator.getRoles().contains(RoleCode.SYS_ADMIN.name());
-    }
-
-    private Long requireEnterpriseId(UserAccount user) {
-        if (user.getEnterpriseId() == null) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
-        }
-        return user.getEnterpriseId();
     }
 
     private EnterpriseListItemData toListItem(Enterprise enterprise) {
@@ -204,9 +166,7 @@ public class EnterpriseManagementService {
                 enterprise.getId(),
                 enterprise.getCode(),
                 enterprise.getName(),
-                isEnabled(enterprise),
-                enterprise.getContactName(),
-                enterprise.getContactPhone(),
+                enterprise.getStatus(),
                 enterprise.getRemark(),
                 toOffsetDateTime(enterprise.getCreatedAt()),
                 toOffsetDateTime(enterprise.getUpdatedAt()));
@@ -217,16 +177,10 @@ public class EnterpriseManagementService {
                 enterprise.getId(),
                 enterprise.getCode(),
                 enterprise.getName(),
-                isEnabled(enterprise),
-                enterprise.getContactName(),
-                enterprise.getContactPhone(),
+                enterprise.getStatus(),
                 enterprise.getRemark(),
                 toOffsetDateTime(enterprise.getCreatedAt()),
                 toOffsetDateTime(enterprise.getUpdatedAt()));
-    }
-
-    private boolean isEnabled(Enterprise enterprise) {
-        return enterprise.getStatus() != null && enterprise.getStatus() == (byte) 1;
     }
 
     private Map<String, Object> snapshot(Enterprise enterprise) {
@@ -234,9 +188,7 @@ public class EnterpriseManagementService {
         snapshot.put("id", enterprise.getId());
         snapshot.put("code", enterprise.getCode());
         snapshot.put("name", enterprise.getName());
-        snapshot.put("enabled", isEnabled(enterprise));
-        snapshot.put("contactName", enterprise.getContactName());
-        snapshot.put("contactPhone", enterprise.getContactPhone());
+        snapshot.put("status", enterprise.getStatus());
         snapshot.put("remark", enterprise.getRemark());
         return snapshot;
     }
@@ -258,9 +210,11 @@ public class EnterpriseManagementService {
     }
 
     private Long resolveOperatorEnterpriseId(AuthenticatedUser operator) {
-        return userAccountRepository.findById(operator.getUserId())
-                .map(UserAccount::getEnterpriseId)
-                .orElse(null);
+        try {
+            return businessAccessService.getOperatorAccount(operator).getEnterpriseId();
+        } catch (BusinessException ex) {
+            return null;
+        }
     }
 
     private String normalizeRequired(String value, String message) {
@@ -296,5 +250,18 @@ public class EnterpriseManagementService {
             throw new BusinessException(ApiCode.INVALID_PARAM, "size必须大于等于1");
         }
         return Math.min(size, MAX_SIZE);
+    }
+
+    private Byte normalizeStatus(Byte status, boolean allowNull) {
+        if (status == null) {
+            if (allowNull) {
+                return null;
+            }
+            throw new BusinessException(ApiCode.INVALID_PARAM, "status不能为空");
+        }
+        if (status != (byte) 0 && status != (byte) 1) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "status仅支持0或1");
+        }
+        return status;
     }
 }

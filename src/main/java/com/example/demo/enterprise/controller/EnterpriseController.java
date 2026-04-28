@@ -36,9 +36,9 @@ public class EnterpriseController {
     public ApiResponse<EnterprisePageResponseData> listEnterprises(@RequestParam(required = false) Integer page,
                                                                    @RequestParam(required = false) Integer size,
                                                                    @RequestParam(required = false) String keyword,
-                                                                   @RequestParam(required = false) Boolean enabled,
+                                                                   @RequestParam(required = false) Byte status,
                                                                    Authentication authentication) {
-        return ApiResponse.success(enterpriseManagementService.listEnterprises(currentUser(authentication), page, size, keyword, enabled));
+        return ApiResponse.success(enterpriseManagementService.listEnterprises(currentUser(authentication), page, size, keyword, status));
     }
 
     @GetMapping("/{id}")
@@ -67,7 +67,7 @@ public class EnterpriseController {
     public ApiResponse<EnterpriseDetailResponseData> updateEnterpriseStatus(@PathVariable Long id,
                                                                             @Valid @RequestBody UpdateEnterpriseStatusRequest request,
                                                                             Authentication authentication) {
-        return ApiResponse.success(enterpriseManagementService.updateStatus(currentUser(authentication), id, request.enabled()));
+        return ApiResponse.success(enterpriseManagementService.updateStatus(currentUser(authentication), id, request.status()));
     }
 
     private AuthenticatedUser currentUser(Authentication authentication) {

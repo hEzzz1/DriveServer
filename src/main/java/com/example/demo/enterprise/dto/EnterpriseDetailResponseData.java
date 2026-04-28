@@ -6,9 +6,7 @@ public record EnterpriseDetailResponseData(
         Long id,
         String code,
         String name,
-        boolean enabled,
-        String contactName,
-        String contactPhone,
+        Byte status,
         String remark,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt

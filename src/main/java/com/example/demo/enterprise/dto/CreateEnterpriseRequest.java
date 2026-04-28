@@ -7,8 +7,6 @@ public record CreateEnterpriseRequest(
         String code,
         @NotBlank(message = "name不能为空")
         String name,
-        String contactName,
-        String contactPhone,
         String remark
 ) {
 }

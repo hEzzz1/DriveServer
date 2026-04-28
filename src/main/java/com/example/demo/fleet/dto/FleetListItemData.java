@@ -1,10 +1,10 @@
-package com.example.demo.enterprise.dto;
+package com.example.demo.fleet.dto;
 
 import java.time.OffsetDateTime;
 
-public record EnterpriseListItemData(
+public record FleetListItemData(
         Long id,
-        String code,
+        Long enterpriseId,
         String name,
         Byte status,
         String remark,
