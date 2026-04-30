@@ -37,13 +37,16 @@ public class EnterpriseManagementService {
     private final EnterpriseRepository enterpriseRepository;
     private final BusinessAccessService businessAccessService;
     private final SystemAuditService systemAuditService;
+    private final EnterpriseActivationCodeService enterpriseActivationCodeService;
 
     public EnterpriseManagementService(EnterpriseRepository enterpriseRepository,
                                        BusinessAccessService businessAccessService,
-                                       SystemAuditService systemAuditService) {
+                                       SystemAuditService systemAuditService,
+                                       EnterpriseActivationCodeService enterpriseActivationCodeService) {
         this.enterpriseRepository = enterpriseRepository;
         this.businessAccessService = businessAccessService;
         this.systemAuditService = systemAuditService;
+        this.enterpriseActivationCodeService = enterpriseActivationCodeService;
     }
 
     @Transactional(readOnly = true)
@@ -89,8 +92,10 @@ public class EnterpriseManagementService {
         enterprise.setName(normalizeRequired(request.name(), "name不能为空"));
         enterprise.setStatus((byte) 1);
         enterprise.setRemark(normalizeOptional(request.remark()));
-        enterprise.setCreatedAt(LocalDateTime.now(ZoneOffset.UTC));
-        enterprise.setUpdatedAt(LocalDateTime.now(ZoneOffset.UTC));
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        enterpriseActivationCodeService.initializeForNewEnterprise(enterprise, now);
+        enterprise.setCreatedAt(now);
+        enterprise.setUpdatedAt(now);
         Enterprise saved = enterpriseRepository.save(enterprise);
 
         systemAuditService.record(operator, "ENTERPRISE", "CREATE_ENTERPRISE", "ENTERPRISE", String.valueOf(saved.getId()),

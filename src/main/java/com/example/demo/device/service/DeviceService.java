@@ -146,7 +146,7 @@ public class DeviceService {
         device.setDeviceCode(deviceCode);
         device.setDeviceName(normalizeRequired(request.deviceName(), "deviceName不能为空"));
         device.setActivationCode(normalizeOptional(request.activationCode()));
-        device.setStatus(EdgeDeviceStatus.NEW.name());
+        device.setStatus(resolution.enterpriseId() == null ? EdgeDeviceStatus.NEW.name() : EdgeDeviceStatus.BOUND.name());
         device.setRemark(normalizeOptional(request.remark()));
         device.setCreatedAt(now);
         device.setUpdatedAt(now);
@@ -284,7 +284,7 @@ public class DeviceService {
                 device.getDeviceName(),
                 device.getStatus(),
                 resolveBindStatus(state.enterpriseBindStatus()).name(),
-                currentBindRequest == null ? null : currentBindRequest.getStatus(),
+                null,
                 new DeviceBindingViewData.ContextDeviceData(
                         device.getId(),
                         device.getDeviceCode(),
@@ -300,7 +300,7 @@ public class DeviceService {
                 toNamedResourceData(enterprise),
                 toNamedResourceData(fleet),
                 toVehicleData(vehicle),
-                toBindRequestSummary(currentBindRequest, device, requestedEnterprise, state.effectiveStage()),
+                null,
                 toSessionData(activeSession),
                 device.getEnterpriseId(),
                 enterprise == null ? null : enterprise.getName(),
@@ -337,9 +337,6 @@ public class DeviceService {
 
     @Transactional
     public void ensureReadyForSignIn(Device device) {
-        if (device.getLastActivatedAt() == null) {
-            throw new BusinessException(ApiCode.DEVICE_NOT_ACTIVATED, ApiCode.DEVICE_NOT_ACTIVATED.getMessage());
-        }
         EdgeDeviceEnterpriseBindStatus enterpriseBindStatus = resolveEnterpriseBindStatus(device, currentBindRequestStatus(device));
         assertEnterpriseApprovedOrThrow(enterpriseBindStatus);
         if (device.getVehicleId() == null) {
@@ -393,26 +390,17 @@ public class DeviceService {
         if (EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
             return EdgeDeviceLifecycleStatus.DISABLED;
         }
-        if (device.getLastActivatedAt() == null) {
-            return EdgeDeviceLifecycleStatus.NEW;
+        if (device.getEnterpriseId() != null) {
+            return EdgeDeviceLifecycleStatus.BOUND;
         }
-        return EdgeDeviceLifecycleStatus.ACTIVATED;
+        return EdgeDeviceLifecycleStatus.NEW;
     }
 
     public EdgeDeviceEnterpriseBindStatus resolveEnterpriseBindStatus(Device device, String currentBindRequestStatus) {
         if (device.getEnterpriseId() != null) {
             return EdgeDeviceEnterpriseBindStatus.APPROVED;
         }
-        if (!StringUtils.hasText(currentBindRequestStatus)) {
-            return EdgeDeviceEnterpriseBindStatus.UNBOUND;
-        }
-        return switch (EdgeDeviceBindRequestStatus.valueOf(currentBindRequestStatus)) {
-            case PENDING -> EdgeDeviceEnterpriseBindStatus.PENDING;
-            case APPROVED -> EdgeDeviceEnterpriseBindStatus.APPROVED;
-            case REJECTED -> EdgeDeviceEnterpriseBindStatus.REJECTED;
-            case EXPIRED -> EdgeDeviceEnterpriseBindStatus.EXPIRED;
-            case CANCELED -> EdgeDeviceEnterpriseBindStatus.UNBOUND;
-        };
+        return EdgeDeviceEnterpriseBindStatus.UNBOUND;
     }
 
     public EdgeDeviceVehicleBindStatus resolveVehicleBindStatus(Device device) {
@@ -434,8 +422,7 @@ public class DeviceService {
             return EdgeDeviceEffectiveStage.IN_SESSION;
         }
         return switch (enterpriseBindStatus) {
-            case UNBOUND, REJECTED, EXPIRED -> EdgeDeviceEffectiveStage.APPLY_BIND;
-            case PENDING -> EdgeDeviceEffectiveStage.PENDING_APPROVAL;
+            case UNBOUND, PENDING, REJECTED, EXPIRED -> EdgeDeviceEffectiveStage.CLAIM_ENTERPRISE;
             case APPROVED -> vehicleBindStatus == EdgeDeviceVehicleBindStatus.ASSIGNED
                     ? EdgeDeviceEffectiveStage.READY_SIGN_IN
                     : EdgeDeviceEffectiveStage.WAITING_VEHICLE;
@@ -561,10 +548,8 @@ public class DeviceService {
             case APPROVED -> {
                 return;
             }
-            case PENDING -> throw new BusinessException(ApiCode.DEVICE_BIND_PENDING, ApiCode.DEVICE_BIND_PENDING.getMessage());
-            case REJECTED -> throw new BusinessException(ApiCode.DEVICE_BIND_REJECTED, ApiCode.DEVICE_BIND_REJECTED.getMessage());
-            case EXPIRED -> throw new BusinessException(ApiCode.DEVICE_BIND_EXPIRED, ApiCode.DEVICE_BIND_EXPIRED.getMessage());
-            case UNBOUND -> throw new BusinessException(ApiCode.DEVICE_NOT_BOUND_ENTERPRISE, ApiCode.DEVICE_NOT_BOUND_ENTERPRISE.getMessage());
+            case PENDING, REJECTED, EXPIRED, UNBOUND ->
+                    throw new BusinessException(ApiCode.DEVICE_NOT_BOUND_ENTERPRISE, ApiCode.DEVICE_NOT_BOUND_ENTERPRISE.getMessage());
         }
     }
 
@@ -682,7 +667,7 @@ public class DeviceService {
     }
 
     private EdgeDeviceStatus deriveBoundStatus(Device device) {
-        return device.getVehicleId() == null ? EdgeDeviceStatus.ENTERPRISE_BOUND : EdgeDeviceStatus.VEHICLE_BOUND;
+        return EdgeDeviceStatus.BOUND;
     }
 
     private void syncDeviceStatusAfterBindRequestChange(Device device, String requestStatus) {
@@ -690,12 +675,8 @@ public class DeviceService {
             deviceRepository.save(device);
             return;
         }
-        if (device.getEnterpriseId() == null && EdgeDeviceBindRequestStatus.PENDING.name().equals(requestStatus)) {
-            device.setStatus(EdgeDeviceStatus.PENDING_ENTERPRISE_APPROVAL.name());
-        } else if (device.getEnterpriseId() != null) {
+        if (device.getEnterpriseId() != null) {
             device.setStatus(deriveBoundStatus(device).name());
-        } else if (device.getLastActivatedAt() != null) {
-            device.setStatus(EdgeDeviceStatus.ACTIVATED.name());
         } else {
             device.setStatus(EdgeDeviceStatus.NEW.name());
         }
@@ -821,7 +802,7 @@ public class DeviceService {
         }
         if (status == (byte) 1) {
             if (device.getEnterpriseId() == null) {
-                return device.getLastActivatedAt() == null ? EdgeDeviceStatus.NEW.name() : EdgeDeviceStatus.ACTIVATED.name();
+                return EdgeDeviceStatus.NEW.name();
             }
             return deriveBoundStatus(device).name();
         }

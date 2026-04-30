@@ -44,6 +44,15 @@ public final class DeviceBindingViewData {
     ) {
     }
 
+    public record ClaimedDeviceData(
+            Long id,
+            String deviceCode,
+            String deviceName,
+            String deviceToken,
+            String lifecycleStatus
+    ) {
+    }
+
     public record BindRequestDeviceData(
             Long id,
             String deviceCode,

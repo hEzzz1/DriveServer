@@ -6,5 +6,6 @@ public enum EdgeDeviceStatus {
     PENDING_ENTERPRISE_APPROVAL,
     ENTERPRISE_BOUND,
     VEHICLE_BOUND,
+    BOUND,
     DISABLED
 }

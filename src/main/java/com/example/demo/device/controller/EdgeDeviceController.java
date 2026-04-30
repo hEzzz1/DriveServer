@@ -1,11 +1,14 @@
 package com.example.demo.device.controller;
 
 import com.example.demo.common.api.ApiResponse;
+import com.example.demo.device.dto.ClaimEdgeDeviceRequest;
 import com.example.demo.device.dto.CreateEdgeDeviceBindRequest;
 import com.example.demo.device.dto.DeviceActivateRequest;
 import com.example.demo.device.dto.DeviceActivateResponseData;
+import com.example.demo.device.dto.DeviceClaimResponseData;
 import com.example.demo.device.dto.DeviceContextResponseData;
 import com.example.demo.device.dto.EdgeDeviceBindRequestResponseData;
+import com.example.demo.device.service.EdgeDeviceClaimService;
 import com.example.demo.device.service.EdgeDeviceBindRequestService;
 import com.example.demo.device.service.DeviceService;
 import jakarta.validation.Valid;
@@ -21,12 +24,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class EdgeDeviceController {
 
     private final DeviceService deviceService;
+    private final EdgeDeviceClaimService edgeDeviceClaimService;
     private final EdgeDeviceBindRequestService edgeDeviceBindRequestService;
 
     public EdgeDeviceController(DeviceService deviceService,
+                                EdgeDeviceClaimService edgeDeviceClaimService,
                                 EdgeDeviceBindRequestService edgeDeviceBindRequestService) {
         this.deviceService = deviceService;
+        this.edgeDeviceClaimService = edgeDeviceClaimService;
         this.edgeDeviceBindRequestService = edgeDeviceBindRequestService;
+    }
+
+    @PostMapping("/claim")
+    public ApiResponse<DeviceClaimResponseData> claim(@Valid @RequestBody ClaimEdgeDeviceRequest request) {
+        return ApiResponse.success(edgeDeviceClaimService.claim(request));
     }
 
     @PostMapping("/activate")

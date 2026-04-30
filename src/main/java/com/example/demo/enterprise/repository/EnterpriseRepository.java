@@ -12,4 +12,8 @@ public interface EnterpriseRepository extends JpaRepository<Enterprise, Long>, J
     boolean existsByCodeAndIdNot(String code, Long id);
 
     Optional<Enterprise> findByCode(String code);
+
+    Optional<Enterprise> findByActivationCode(String activationCode);
+
+    boolean existsByActivationCode(String activationCode);
 }

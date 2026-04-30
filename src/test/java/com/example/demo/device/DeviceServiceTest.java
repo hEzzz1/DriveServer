@@ -77,7 +77,7 @@ class DeviceServiceTest {
         device.setId(1L);
         device.setDeviceCode("DEV001");
         device.setDeviceToken("TOKEN001");
-        device.setStatus(EdgeDeviceStatus.VEHICLE_BOUND.name());
+        device.setStatus(EdgeDeviceStatus.BOUND.name());
         DrivingSession session = new DrivingSession();
         session.setId(2L);
         session.setDeviceId(1L);
@@ -128,7 +128,7 @@ class DeviceServiceTest {
         device.setVehicleId(30L);
         device.setDeviceCode("DEV001");
         device.setDeviceName("Main Device");
-        device.setStatus(EdgeDeviceStatus.VEHICLE_BOUND.name());
+        device.setStatus(EdgeDeviceStatus.BOUND.name());
         device.setLastSeenAt(LocalDateTime.of(2026, 4, 28, 10, 0));
 
         DrivingSession session = new DrivingSession();
@@ -170,19 +170,19 @@ class DeviceServiceTest {
                 EdgeDeviceSessionStage.ACTIVE)).isEqualTo(EdgeDeviceEffectiveStage.DISABLED);
 
         assertThat(service.resolveEffectiveStage(
-                EdgeDeviceLifecycleStatus.ACTIVATED,
+                EdgeDeviceLifecycleStatus.BOUND,
                 EdgeDeviceEnterpriseBindStatus.APPROVED,
                 EdgeDeviceVehicleBindStatus.ASSIGNED,
                 EdgeDeviceSessionStage.ACTIVE)).isEqualTo(EdgeDeviceEffectiveStage.IN_SESSION);
 
         assertThat(service.resolveEffectiveStage(
-                EdgeDeviceLifecycleStatus.ACTIVATED,
+                EdgeDeviceLifecycleStatus.BOUND,
                 EdgeDeviceEnterpriseBindStatus.EXPIRED,
                 EdgeDeviceVehicleBindStatus.UNASSIGNED,
-                EdgeDeviceSessionStage.IDLE)).isEqualTo(EdgeDeviceEffectiveStage.APPLY_BIND);
+                EdgeDeviceSessionStage.IDLE)).isEqualTo(EdgeDeviceEffectiveStage.CLAIM_ENTERPRISE);
 
         assertThat(service.resolveEffectiveStage(
-                EdgeDeviceLifecycleStatus.ACTIVATED,
+                EdgeDeviceLifecycleStatus.BOUND,
                 EdgeDeviceEnterpriseBindStatus.APPROVED,
                 EdgeDeviceVehicleBindStatus.UNASSIGNED,
                 EdgeDeviceSessionStage.IDLE)).isEqualTo(EdgeDeviceEffectiveStage.WAITING_VEHICLE);
@@ -220,7 +220,7 @@ class DeviceServiceTest {
         device.setEnterpriseId(10L);
         device.setDeviceCode("DEV001");
         device.setDeviceName("Main Device");
-        device.setStatus(EdgeDeviceStatus.ENTERPRISE_BOUND.name());
+        device.setStatus(EdgeDeviceStatus.BOUND.name());
         device.setLastActivatedAt(LocalDateTime.now());
 
         Vehicle vehicle = new Vehicle();

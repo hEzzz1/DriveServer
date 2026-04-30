@@ -35,6 +35,21 @@ public class Enterprise {
     @Column(length = 255)
     private String remark;
 
+    @Column(name = "activation_code", length = 64, unique = true)
+    private String activationCode;
+
+    @Column(name = "activation_code_status", length = 32)
+    private String activationCodeStatus;
+
+    @Column(name = "activation_code_rotated_at")
+    private LocalDateTime activationCodeRotatedAt;
+
+    @Column(name = "activation_code_expires_at")
+    private LocalDateTime activationCodeExpiresAt;
+
+    @Column(name = "activation_code_remark", length = 255)
+    private String activationCodeRemark;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -95,6 +110,46 @@ public class Enterprise {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getActivationCode() {
+        return activationCode;
+    }
+
+    public void setActivationCode(String activationCode) {
+        this.activationCode = activationCode;
+    }
+
+    public String getActivationCodeStatus() {
+        return activationCodeStatus;
+    }
+
+    public void setActivationCodeStatus(String activationCodeStatus) {
+        this.activationCodeStatus = activationCodeStatus;
+    }
+
+    public LocalDateTime getActivationCodeRotatedAt() {
+        return activationCodeRotatedAt;
+    }
+
+    public void setActivationCodeRotatedAt(LocalDateTime activationCodeRotatedAt) {
+        this.activationCodeRotatedAt = activationCodeRotatedAt;
+    }
+
+    public LocalDateTime getActivationCodeExpiresAt() {
+        return activationCodeExpiresAt;
+    }
+
+    public void setActivationCodeExpiresAt(LocalDateTime activationCodeExpiresAt) {
+        this.activationCodeExpiresAt = activationCodeExpiresAt;
+    }
+
+    public String getActivationCodeRemark() {
+        return activationCodeRemark;
+    }
+
+    public void setActivationCodeRemark(String activationCodeRemark) {
+        this.activationCodeRemark = activationCodeRemark;
     }
 
     public LocalDateTime getCreatedAt() {
