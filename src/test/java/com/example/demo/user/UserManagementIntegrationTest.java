@@ -88,7 +88,7 @@ class UserManagementIntegrationTest {
         saveRole("ANALYST", "分析员");
         saveRole("SYS_ADMIN", "系统管理员");
 
-        superAdminUser = saveUser("super-admin", "123456", 1, platformEnterprise.getId());
+        superAdminUser = saveUser("super-admin", "123456", 1, null);
         enterpriseAdminAUser = saveUser("enterprise-admin-a", "123456", 1, enterpriseA.getId());
         enterpriseViewerAUser = saveUser("viewer-a", "123456", 1, enterpriseA.getId());
         enterpriseViewerBUser = saveUser("viewer-b", "123456", 1, enterpriseB.getId());
@@ -118,6 +118,13 @@ class UserManagementIntegrationTest {
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.items[0].enterpriseId").value(enterpriseA.getId()))
                 .andExpect(jsonPath("$.data.items[0].roles[0]").value("ORG_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/platform/internal-users")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].enterpriseId").isEmpty())
+                .andExpect(jsonPath("$.data.items[0].roles[0]").value("PLATFORM_SUPER_ADMIN"));
     }
 
     @Test
@@ -226,6 +233,19 @@ class UserManagementIntegrationTest {
                 .andExpect(jsonPath("$.data[0].roleCode").value("ORG_OPERATOR"))
                 .andExpect(jsonPath("$.data[1].roleCode").value("ORG_ANALYST"))
                 .andExpect(jsonPath("$.data[2].roleCode").value("ORG_VIEWER"));
+    }
+
+    @Test
+    void superAdminShouldSeePlatformRoleListFromInternalUsersAlias() throws Exception {
+        String token = loginAndGetToken("super-admin", "123456");
+
+        mockMvc.perform(get("/api/v1/platform/internal-users/roles")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(3))
+                .andExpect(jsonPath("$.data[0].roleCode").value("PLATFORM_SUPER_ADMIN"))
+                .andExpect(jsonPath("$.data[1].roleCode").value("PLATFORM_SYS_ADMIN"))
+                .andExpect(jsonPath("$.data[2].roleCode").value("PLATFORM_RISK_ADMIN"));
     }
 
     @Test

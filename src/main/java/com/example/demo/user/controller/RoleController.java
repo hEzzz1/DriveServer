@@ -13,7 +13,11 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping({"/api/v1/roles", "/api/v1/org/users/roles", "/api/v1/platform/enterprise-admins/roles"})
+@RequestMapping({
+        "/api/v1/roles",
+        "/api/v1/org/users/roles",
+        "/api/v1/platform/enterprise-admins/roles"
+})
 public class RoleController {
 
     private final OrgUserManagementService orgUserManagementService;
