@@ -1,6 +1,9 @@
 package com.example.demo.system.service;
 
+import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.auth.repository.UserAccountRepository;
+import com.example.demo.auth.service.BusinessAccessService;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.common.trace.TraceIdContext;
@@ -11,6 +14,7 @@ import com.example.demo.system.dto.SystemAuditPageResponseData;
 import com.example.demo.system.entity.SystemAuditLog;
 import com.example.demo.system.repository.SystemAuditRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
@@ -39,10 +43,17 @@ public class SystemAuditService {
     private static final int MAX_SIZE = 200;
 
     private final SystemAuditRepository systemAuditRepository;
+    private final UserAccountRepository userAccountRepository;
+    private final BusinessAccessService businessAccessService;
     private final ObjectMapper objectMapper;
 
-    public SystemAuditService(SystemAuditRepository systemAuditRepository, ObjectMapper objectMapper) {
+    public SystemAuditService(SystemAuditRepository systemAuditRepository,
+                              UserAccountRepository userAccountRepository,
+                              BusinessAccessService businessAccessService,
+                              ObjectMapper objectMapper) {
         this.systemAuditRepository = systemAuditRepository;
+        this.userAccountRepository = userAccountRepository;
+        this.businessAccessService = businessAccessService;
         this.objectMapper = objectMapper;
     }
 
@@ -58,9 +69,12 @@ public class SystemAuditService {
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         HttpServletRequest request = currentRequest();
         String traceId = TraceIdContext.getTraceId();
+        Long operatorEnterpriseId = resolveOperatorEnterpriseId(operator);
+        Long targetEnterpriseId = resolveTargetEnterpriseId(detail, targetType, targetId);
 
         SystemAuditLog auditLog = new SystemAuditLog();
         auditLog.setOperatorId(operator == null ? null : operator.getUserId());
+        auditLog.setOperatorEnterpriseId(operatorEnterpriseId);
         auditLog.setOperatorName(operator == null ? "system" : operator.getUsername());
         auditLog.setModule(normalize(module, "SYSTEM"));
         auditLog.setAction(normalize(actionType, "UNKNOWN"));
@@ -72,6 +86,7 @@ public class SystemAuditService {
         auditLog.setActionTime(now);
         auditLog.setActionTargetType(normalize(targetType, "UNKNOWN"));
         auditLog.setActionTargetId(normalize(targetId, null));
+        auditLog.setTargetEnterpriseId(targetEnterpriseId);
         auditLog.setActionResult(normalize(actionResult, "SUCCESS"));
         auditLog.setActionRemark(normalize(actionRemark, null));
         auditLog.setTraceId(normalize(traceId, null));
@@ -98,7 +113,7 @@ public class SystemAuditService {
             throw new BusinessException(ApiCode.INVALID_PARAM, "startTime不能晚于endTime");
         }
 
-        Specification<SystemAuditLog> specification = buildSpecification(module, actionType, targetType, targetId, actionBy, startUtc, endUtc);
+        Specification<SystemAuditLog> specification = buildSpecification(module, actionType, targetType, targetId, actionBy, startUtc, endUtc, null);
         Page<SystemAuditLog> pageResult = systemAuditRepository.findAll(
                 specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.DESC, "actionTime").and(Sort.by(Sort.Direction.DESC, "id"))));
@@ -108,8 +123,7 @@ public class SystemAuditService {
 
     @Transactional(readOnly = true)
     public SystemAuditDetailData getDetail(Long id) {
-        SystemAuditLog log = systemAuditRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(ApiCode.NOT_FOUND, ApiCode.NOT_FOUND.getMessage()));
+        SystemAuditLog log = getLog(id);
         return new SystemAuditDetailData(
                 log.getId(),
                 log.getOperatorId(),
@@ -156,8 +170,105 @@ public class SystemAuditService {
                                         OffsetDateTime endTime) {
         LocalDateTime startUtc = startTime == null ? null : LocalDateTime.ofInstant(startTime.toInstant(), ZoneOffset.UTC);
         LocalDateTime endUtc = endTime == null ? null : LocalDateTime.ofInstant(endTime.toInstant(), ZoneOffset.UTC);
-        Specification<SystemAuditLog> specification = buildSpecification(module, actionType, targetType, targetId, actionBy, startUtc, endUtc);
+        Specification<SystemAuditLog> specification = buildSpecification(module, actionType, targetType, targetId, actionBy, startUtc, endUtc, null);
         return systemAuditRepository.findAll(specification, Sort.by(Sort.Direction.DESC, "actionTime").and(Sort.by(Sort.Direction.DESC, "id")));
+    }
+
+    @Transactional(readOnly = true)
+    public SystemAuditPageResponseData listForPlatform(AuthenticatedUser operator,
+                                                       String module,
+                                                       String actionType,
+                                                       String targetType,
+                                                       String targetId,
+                                                       Long actionBy,
+                                                       OffsetDateTime startTime,
+                                                       OffsetDateTime endTime,
+                                                       Integer page,
+                                                       Integer size) {
+        businessAccessService.assertPlatformAdmin(operator);
+        return list(module, actionType, targetType, targetId, actionBy, startTime, endTime, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public SystemAuditDetailData getDetailForPlatform(AuthenticatedUser operator, Long id) {
+        businessAccessService.assertPlatformAdmin(operator);
+        return getDetail(id);
+    }
+
+    @Transactional(readOnly = true)
+    public SystemAuditExportResponseData exportForPlatform(AuthenticatedUser operator,
+                                                           String module,
+                                                           String actionType,
+                                                           String targetType,
+                                                           String targetId,
+                                                           Long actionBy,
+                                                           OffsetDateTime startTime,
+                                                           OffsetDateTime endTime) {
+        businessAccessService.assertPlatformAdmin(operator);
+        return export(module, actionType, targetType, targetId, actionBy, startTime, endTime);
+    }
+
+    @Transactional(readOnly = true)
+    public SystemAuditPageResponseData listForOrg(AuthenticatedUser operator,
+                                                  String module,
+                                                  String actionType,
+                                                  String targetType,
+                                                  String targetId,
+                                                  Long actionBy,
+                                                  OffsetDateTime startTime,
+                                                  OffsetDateTime endTime,
+                                                  Integer page,
+                                                  Integer size) {
+        Long enterpriseId = requireOrgEnterpriseId(operator);
+        int pageNo = normalizePage(page);
+        int pageSize = normalizeSize(size);
+        LocalDateTime startUtc = startTime == null ? null : LocalDateTime.ofInstant(startTime.toInstant(), ZoneOffset.UTC);
+        LocalDateTime endUtc = endTime == null ? null : LocalDateTime.ofInstant(endTime.toInstant(), ZoneOffset.UTC);
+        if (startUtc != null && endUtc != null && startUtc.isAfter(endUtc)) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "startTime不能晚于endTime");
+        }
+
+        Specification<SystemAuditLog> specification = buildSpecification(module, actionType, targetType, targetId, actionBy, startUtc, endUtc, enterpriseId);
+        Page<SystemAuditLog> pageResult = systemAuditRepository.findAll(
+                specification,
+                PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.DESC, "actionTime").and(Sort.by(Sort.Direction.DESC, "id"))));
+        List<SystemAuditListItemData> items = pageResult.getContent().stream().map(this::toListItem).toList();
+        return new SystemAuditPageResponseData(pageResult.getTotalElements(), pageNo, pageSize, items);
+    }
+
+    @Transactional(readOnly = true)
+    public SystemAuditDetailData getDetailForOrg(AuthenticatedUser operator, Long id) {
+        Long enterpriseId = requireOrgEnterpriseId(operator);
+        SystemAuditLog log = getLog(id);
+        if (!belongsToEnterprise(log, enterpriseId)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
+        return toDetail(log);
+    }
+
+    @Transactional(readOnly = true)
+    public SystemAuditExportResponseData exportForOrg(AuthenticatedUser operator,
+                                                      String module,
+                                                      String actionType,
+                                                      String targetType,
+                                                      String targetId,
+                                                      Long actionBy,
+                                                      OffsetDateTime startTime,
+                                                      OffsetDateTime endTime) {
+        Long enterpriseId = requireOrgEnterpriseId(operator);
+        LocalDateTime startUtc = startTime == null ? null : LocalDateTime.ofInstant(startTime.toInstant(), ZoneOffset.UTC);
+        LocalDateTime endUtc = endTime == null ? null : LocalDateTime.ofInstant(endTime.toInstant(), ZoneOffset.UTC);
+        if (startUtc != null && endUtc != null && startUtc.isAfter(endUtc)) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "startTime不能晚于endTime");
+        }
+        Specification<SystemAuditLog> specification = buildSpecification(module, actionType, targetType, targetId, actionBy, startUtc, endUtc, enterpriseId);
+        List<SystemAuditListItemData> items = systemAuditRepository.findAll(
+                        specification,
+                        Sort.by(Sort.Direction.DESC, "actionTime").and(Sort.by(Sort.Direction.DESC, "id")))
+                .stream()
+                .map(this::toListItem)
+                .toList();
+        return new SystemAuditExportResponseData(OffsetDateTime.now(ZoneOffset.UTC), items.size(), items);
     }
 
     private Specification<SystemAuditLog> buildSpecification(String module,
@@ -166,7 +277,8 @@ public class SystemAuditService {
                                                              String targetId,
                                                              Long actionBy,
                                                              LocalDateTime startTime,
-                                                             LocalDateTime endTime) {
+                                                             LocalDateTime endTime,
+                                                             Long enterpriseId) {
         List<Specification<SystemAuditLog>> specifications = new ArrayList<>();
         if (StringUtils.hasText(module)) {
             specifications.add((root, query, cb) -> cb.equal(root.get("module"), module.trim()));
@@ -189,7 +301,102 @@ public class SystemAuditService {
         if (endTime != null) {
             specifications.add((root, query, cb) -> cb.lessThanOrEqualTo(root.get("actionTime"), endTime));
         }
+        if (enterpriseId != null) {
+            specifications.add((root, query, cb) -> cb.or(
+                    cb.equal(root.get("operatorEnterpriseId"), enterpriseId),
+                    cb.equal(root.get("targetEnterpriseId"), enterpriseId)));
+        }
         return specifications.stream().reduce(Specification.where(null), Specification::and);
+    }
+
+    private SystemAuditDetailData toDetail(SystemAuditLog log) {
+        return new SystemAuditDetailData(
+                log.getId(),
+                log.getOperatorId(),
+                log.getOperatorName(),
+                log.getModule(),
+                log.getAction(),
+                log.getTargetId(),
+                log.getDetailJson(),
+                log.getActionType(),
+                log.getActionBy(),
+                toOffsetDateTime(log.getActionTime()),
+                log.getActionTargetType(),
+                log.getActionTargetId(),
+                log.getActionResult(),
+                log.getActionRemark(),
+                log.getTraceId(),
+                log.getIp(),
+                log.getUserAgent(),
+                toOffsetDateTime(log.getCreatedAt()));
+    }
+
+    private SystemAuditLog getLog(Long id) {
+        return systemAuditRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ApiCode.NOT_FOUND, ApiCode.NOT_FOUND.getMessage()));
+    }
+
+    private Long requireOrgEnterpriseId(AuthenticatedUser operator) {
+        if (businessAccessService.isPlatformAdmin(operator)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
+        return businessAccessService.requireOperatorEnterpriseId(operator);
+    }
+
+    private boolean belongsToEnterprise(SystemAuditLog log, Long enterpriseId) {
+        return enterpriseId != null && (enterpriseId.equals(log.getOperatorEnterpriseId()) || enterpriseId.equals(log.getTargetEnterpriseId()));
+    }
+
+    private Long resolveOperatorEnterpriseId(AuthenticatedUser operator) {
+        if (operator == null || operator.getUserId() == null) {
+            return null;
+        }
+        return userAccountRepository.findById(operator.getUserId())
+                .map(UserAccount::getEnterpriseId)
+                .orElse(null);
+    }
+
+    private Long resolveTargetEnterpriseId(Object detail, String targetType, String targetId) {
+        Long fromDetail = extractEnterpriseId(detail, "targetEnterpriseId");
+        if (fromDetail != null) {
+            return fromDetail;
+        }
+        Long genericEnterpriseId = extractEnterpriseId(detail, "enterpriseId");
+        if (genericEnterpriseId != null) {
+            return genericEnterpriseId;
+        }
+        if ("ENTERPRISE".equalsIgnoreCase(normalize(targetType, null))) {
+            return parseLong(targetId);
+        }
+        return null;
+    }
+
+    private Long extractEnterpriseId(Object detail, String fieldName) {
+        if (detail == null || !StringUtils.hasText(fieldName)) {
+            return null;
+        }
+        JsonNode node = objectMapper.valueToTree(detail).path(fieldName);
+        if (node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        if (node.canConvertToLong()) {
+            return node.longValue();
+        }
+        if (node.isTextual()) {
+            return parseLong(node.asText());
+        }
+        return null;
+    }
+
+    private Long parseLong(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     private SystemAuditListItemData toListItem(SystemAuditLog log) {

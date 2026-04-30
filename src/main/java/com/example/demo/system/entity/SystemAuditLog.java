@@ -21,6 +21,9 @@ public class SystemAuditLog {
     @Column(name = "operator_id")
     private Long operatorId;
 
+    @Column(name = "operator_enterprise_id")
+    private Long operatorEnterpriseId;
+
     @Column(name = "operator_name", nullable = false, length = 64)
     private String operatorName;
 
@@ -55,6 +58,9 @@ public class SystemAuditLog {
     @Column(name = "action_target_id", length = 64)
     private String actionTargetId;
 
+    @Column(name = "target_enterprise_id")
+    private Long targetEnterpriseId;
+
     @Column(name = "action_result", nullable = false, length = 32)
     private String actionResult;
 
@@ -84,6 +90,14 @@ public class SystemAuditLog {
 
     public void setOperatorId(Long operatorId) {
         this.operatorId = operatorId;
+    }
+
+    public Long getOperatorEnterpriseId() {
+        return operatorEnterpriseId;
+    }
+
+    public void setOperatorEnterpriseId(Long operatorEnterpriseId) {
+        this.operatorEnterpriseId = operatorEnterpriseId;
     }
 
     public String getOperatorName() {
@@ -172,6 +186,14 @@ public class SystemAuditLog {
 
     public void setActionTargetId(String actionTargetId) {
         this.actionTargetId = actionTargetId;
+    }
+
+    public Long getTargetEnterpriseId() {
+        return targetEnterpriseId;
+    }
+
+    public void setTargetEnterpriseId(Long targetEnterpriseId) {
+        this.targetEnterpriseId = targetEnterpriseId;
     }
 
     public String getActionResult() {

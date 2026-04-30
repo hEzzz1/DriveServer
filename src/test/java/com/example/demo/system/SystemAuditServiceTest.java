@@ -1,6 +1,9 @@
 package com.example.demo.system;
 
+import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.auth.repository.UserAccountRepository;
+import com.example.demo.auth.service.BusinessAccessService;
 import com.example.demo.system.entity.SystemAuditLog;
 import com.example.demo.system.repository.SystemAuditRepository;
 import com.example.demo.system.service.SystemAuditService;
@@ -30,8 +33,10 @@ class SystemAuditServiceTest {
     @Test
     void recordShouldLeaveOperatorColumnsNullForSystemActions() {
         SystemAuditRepository repository = mock(SystemAuditRepository.class);
+        UserAccountRepository userAccountRepository = mock(UserAccountRepository.class);
+        BusinessAccessService businessAccessService = mock(BusinessAccessService.class);
         when(repository.save(any(SystemAuditLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        SystemAuditService service = new SystemAuditService(repository, new ObjectMapper());
+        SystemAuditService service = new SystemAuditService(repository, userAccountRepository, businessAccessService, new ObjectMapper());
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr("127.0.0.1");
@@ -51,11 +56,19 @@ class SystemAuditServiceTest {
     @Test
     void recordShouldUseAuthenticatedUserWhenPresent() {
         SystemAuditRepository repository = mock(SystemAuditRepository.class);
+        UserAccountRepository userAccountRepository = mock(UserAccountRepository.class);
+        BusinessAccessService businessAccessService = mock(BusinessAccessService.class);
         when(repository.save(any(SystemAuditLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        SystemAuditService service = new SystemAuditService(repository, new ObjectMapper());
+        SystemAuditService service = new SystemAuditService(repository, userAccountRepository, businessAccessService, new ObjectMapper());
+
+        UserAccount userAccount = new UserAccount();
+        userAccount.setId(99L);
+        userAccount.setEnterpriseId(88L);
+        when(userAccountRepository.findById(99L)).thenReturn(java.util.Optional.of(userAccount));
 
         AuthenticatedUser operator = new AuthenticatedUser(99L, "admin", List.of("PLATFORM_SUPER_ADMIN"));
-        service.record(operator, "RULE", "CREATE_RULE", "RULE", "42", "SUCCESS", "创建规则", null);
+        service.record(operator, "RULE", "CREATE_RULE", "RULE", "42", "SUCCESS", "创建规则",
+                java.util.Map.of("targetEnterpriseId", 77L));
 
         ArgumentCaptor<SystemAuditLog> captor = ArgumentCaptor.forClass(SystemAuditLog.class);
         verify(repository).save(captor.capture());
@@ -63,5 +76,7 @@ class SystemAuditServiceTest {
         assertThat(saved.getOperatorId()).isEqualTo(99L);
         assertThat(saved.getActionBy()).isEqualTo(99L);
         assertThat(saved.getOperatorName()).isEqualTo("admin");
+        assertThat(saved.getOperatorEnterpriseId()).isEqualTo(88L);
+        assertThat(saved.getTargetEnterpriseId()).isEqualTo(77L);
     }
 }

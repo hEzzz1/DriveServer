@@ -75,14 +75,16 @@ public class SystemController {
                                                            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startTime,
                                                            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endTime,
                                                            @RequestParam(required = false) Integer page,
-                                                           @RequestParam(required = false) Integer size) {
-        return ApiResponse.success(systemAuditService.list(module, actionType, targetType, targetId, actionBy, startTime, endTime, page, size));
+                                                           @RequestParam(required = false) Integer size,
+                                                           Authentication authentication) {
+        return ApiResponse.success(systemAuditService.listForPlatform(
+                currentUser(authentication), module, actionType, targetType, targetId, actionBy, startTime, endTime, page, size));
     }
 
     @GetMapping({"/audits/{id}", "/audit/{id}"})
     @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'audit.read')")
-    public ApiResponse<SystemAuditDetailData> auditDetail(@PathVariable Long id) {
-        return ApiResponse.success(systemAuditService.getDetail(id));
+    public ApiResponse<SystemAuditDetailData> auditDetail(@PathVariable Long id, Authentication authentication) {
+        return ApiResponse.success(systemAuditService.getDetailForPlatform(currentUser(authentication), id));
     }
 
     @GetMapping({"/audits/export", "/audit/export"})
@@ -95,7 +97,8 @@ public class SystemController {
                                                                    @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startTime,
                                                                    @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endTime,
                                                                    Authentication authentication) {
-        SystemAuditExportResponseData response = systemAuditService.export(module, actionType, targetType, targetId, actionBy, startTime, endTime);
+        AuthenticatedUser user = currentUser(authentication);
+        SystemAuditExportResponseData response = systemAuditService.exportForPlatform(user, module, actionType, targetType, targetId, actionBy, startTime, endTime);
         systemAuditService.record(currentUser(authentication), "SYSTEM", "EXPORT_AUDITS", "AUDIT", null, "SUCCESS",
                 "导出审计日志", java.util.Map.of("exportedCount", response.total()));
         return ApiResponse.success(response);

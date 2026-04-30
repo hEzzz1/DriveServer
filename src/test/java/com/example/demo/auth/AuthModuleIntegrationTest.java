@@ -13,6 +13,8 @@ import com.example.demo.auth.repository.UserRoleRepository;
 import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.example.demo.enterprise.entity.Enterprise;
 import com.example.demo.enterprise.repository.EnterpriseRepository;
+import com.example.demo.system.entity.SystemAuditLog;
+import com.example.demo.system.repository.SystemAuditRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,10 +61,17 @@ class AuthModuleIntegrationTest {
     private EnterpriseRepository enterpriseRepository;
 
     @Autowired
+    private SystemAuditRepository systemAuditRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
+
+    private Enterprise savedEnterprise;
+    private Enterprise otherEnterprise;
 
     @BeforeEach
     void setUp() {
+        systemAuditRepository.deleteAll();
         userScopeRoleRepository.deleteAll();
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
@@ -75,7 +84,8 @@ class AuthModuleIntegrationTest {
         enterprise.setStatus((byte) 1);
         enterprise.setCreatedAt(LocalDateTime.now());
         enterprise.setUpdatedAt(LocalDateTime.now());
-        Enterprise savedEnterprise = enterpriseRepository.save(enterprise);
+        savedEnterprise = enterpriseRepository.save(enterprise);
+        otherEnterprise = saveEnterprise("ENT-B", "企业B");
 
         Role admin = saveRole("SUPER_ADMIN", "超级管理员");
         Role viewer = saveRole("VIEWER", "观察员");
@@ -166,6 +176,44 @@ class AuthModuleIntegrationTest {
     }
 
     @Test
+    void auditEndpointsShouldSplitPlatformAndOrgScopes() throws Exception {
+        SystemAuditLog visible = saveAuditLog(savedEnterprise.getId(), savedEnterprise.getId(), "USER", "CREATE_USER");
+        SystemAuditLog hidden = saveAuditLog(otherEnterprise.getId(), otherEnterprise.getId(), "USER", "CREATE_USER");
+
+        String enterpriseAdminToken = loginAndGetToken("enterprise-admin", "123456");
+        String adminToken = loginAndGetToken("admin", "123456");
+
+        mockMvc.perform(get("/api/v1/org/audit")
+                        .header("Authorization", "Bearer " + enterpriseAdminToken)
+                        .queryParam("module", "USER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].id").value(visible.getId()));
+
+        mockMvc.perform(get("/api/v1/org/audit/{id}", visible.getId())
+                        .header("Authorization", "Bearer " + enterpriseAdminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(visible.getId()));
+
+        mockMvc.perform(get("/api/v1/org/audit/{id}", hidden.getId())
+                        .header("Authorization", "Bearer " + enterpriseAdminToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(40301));
+
+        mockMvc.perform(get("/api/v1/org/audit/export")
+                        .header("Authorization", "Bearer " + enterpriseAdminToken)
+                        .queryParam("module", "USER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1));
+
+        mockMvc.perform(get("/api/v1/platform/audit")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .queryParam("module", "USER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2));
+    }
+
+    @Test
     void corsPreflightShouldAllowConfiguredOrigin() throws Exception {
         mockMvc.perform(options("/api/v1/auth/login")
                         .header("Origin", "http://localhost:5173")
@@ -183,6 +231,16 @@ class AuthModuleIntegrationTest {
         role.setCreatedAt(LocalDateTime.now());
         role.setUpdatedAt(LocalDateTime.now());
         return roleRepository.save(role);
+    }
+
+    private Enterprise saveEnterprise(String code, String name) {
+        Enterprise enterprise = new Enterprise();
+        enterprise.setCode(code);
+        enterprise.setName(name);
+        enterprise.setStatus((byte) 1);
+        enterprise.setCreatedAt(LocalDateTime.now());
+        enterprise.setUpdatedAt(LocalDateTime.now());
+        return enterpriseRepository.save(enterprise);
     }
 
     private UserAccount saveUser(String username, String password, int status, Long enterpriseId) {
@@ -218,6 +276,30 @@ class AuthModuleIntegrationTest {
         role.setCreatedAt(LocalDateTime.now());
         role.setUpdatedAt(LocalDateTime.now());
         userScopeRoleRepository.save(role);
+    }
+
+    private SystemAuditLog saveAuditLog(Long operatorEnterpriseId, Long targetEnterpriseId, String module, String actionType) {
+        SystemAuditLog log = new SystemAuditLog();
+        log.setOperatorId(null);
+        log.setOperatorEnterpriseId(operatorEnterpriseId);
+        log.setOperatorName("tester");
+        log.setModule(module);
+        log.setAction(actionType);
+        log.setTargetId("1");
+        log.setDetailJson("{\"targetEnterpriseId\":" + targetEnterpriseId + "}");
+        log.setIp("127.0.0.1");
+        log.setActionType(actionType);
+        log.setActionBy(null);
+        log.setActionTime(LocalDateTime.now());
+        log.setActionTargetType("USER");
+        log.setActionTargetId("1");
+        log.setTargetEnterpriseId(targetEnterpriseId);
+        log.setActionResult("SUCCESS");
+        log.setActionRemark("test");
+        log.setTraceId("trace-test");
+        log.setUserAgent("JUnit");
+        log.setCreatedAt(LocalDateTime.now());
+        return systemAuditRepository.save(log);
     }
 
     private String loginAndGetToken(String username, String password) throws Exception {

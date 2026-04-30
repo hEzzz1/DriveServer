@@ -59,6 +59,8 @@ public enum RoleTemplateCode {
                     PermissionCode.RULE_READ.code(),
                     PermissionCode.RULE_MANAGE.code());
             case ORG_ADMIN -> Set.of(
+                    PermissionCode.AUDIT_READ.code(),
+                    PermissionCode.AUDIT_EXPORT.code(),
                     PermissionCode.OVERVIEW_READ.code(),
                     PermissionCode.ALERT_READ.code(),
                     PermissionCode.STATS_READ.code(),
