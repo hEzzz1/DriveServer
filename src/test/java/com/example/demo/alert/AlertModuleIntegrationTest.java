@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -37,6 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AlertModuleIntegrationTest {
 
     private static final long ENTERPRISE_ID = 1001L;
+    private static final long DRIVER_ID = 3001L;
 
     @Autowired
     private MockMvc mockMvc;
@@ -303,6 +305,8 @@ class AlertModuleIntegrationTest {
                 .getContentAsString();
 
         JsonNode root = objectMapper.readTree(json);
+        String alertNo = root.path("data").path("alertNo").asText();
+        assertTrue(alertNo.matches("^ALT\\d{14}" + DRIVER_ID + "$"), "alertNo should be ALT + yyyyMMddHHmmss + driverId");
         return root.path("data").path("id").asLong();
     }
 
@@ -312,7 +316,7 @@ class AlertModuleIntegrationTest {
                   "enterpriseId": %d,
                   "fleetId": 1001,
                   "vehicleId": 2001,
-                  "driverId": 3001,
+                  "driverId": %d,
                   "ruleId": 1,
                   "riskLevel": 3,
                   "riskScore": 0.89,
@@ -321,7 +325,7 @@ class AlertModuleIntegrationTest {
                   "triggerTime": "2026-04-07T10:01:16Z",
                   "remark": "系统自动创建"
                 }
-                """.formatted(ENTERPRISE_ID);
+                """.formatted(ENTERPRISE_ID, DRIVER_ID);
     }
 
     private Role saveRole(String roleCode, String roleName) {

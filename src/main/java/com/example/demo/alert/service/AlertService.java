@@ -36,12 +36,11 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class AlertService {
 
-    private static final DateTimeFormatter ALERT_NO_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    private static final DateTimeFormatter ALERT_NO_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final String INVALID_TRANSITION_MESSAGE = "当前状态不允许该操作";
     private static final int DEFAULT_PAGE = 1;
     private static final int DEFAULT_SIZE = 20;
@@ -74,7 +73,7 @@ public class AlertService {
         String normalizedRemark = normalizeRemark(request.getRemark());
 
         AlertEvent alert = new AlertEvent();
-        alert.setAlertNo(generateAlertNo(now));
+        alert.setAlertNo(generateAlertNo(now, request.getDriverId()));
         alert.setEnterpriseId(request.getEnterpriseId());
         alert.setFleetId(request.getFleetId());
         alert.setVehicleId(request.getVehicleId());
@@ -295,9 +294,8 @@ public class AlertService {
         return value.trim();
     }
 
-    private String generateAlertNo(LocalDateTime now) {
-        int random = ThreadLocalRandom.current().nextInt(1000, 10000);
-        return "ALT" + now.format(ALERT_NO_TIME_FORMATTER) + random;
+    private String generateAlertNo(LocalDateTime now, Long driverId) {
+        return "ALT" + now.format(ALERT_NO_TIME_FORMATTER) + driverId;
     }
 
     private OffsetDateTime toOffsetDateTime(LocalDateTime time) {
