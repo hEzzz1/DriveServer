@@ -7,19 +7,29 @@ import com.example.demo.common.exception.BusinessException;
 import com.example.demo.device.dto.CreateDeviceRequest;
 import com.example.demo.device.dto.DeviceActivateRequest;
 import com.example.demo.device.dto.DeviceActivateResponseData;
+import com.example.demo.device.dto.DeviceBindingViewData;
 import com.example.demo.device.dto.DeviceContextResponseData;
 import com.example.demo.device.dto.DeviceDetailResponseData;
 import com.example.demo.device.dto.DeviceListItemData;
 import com.example.demo.device.dto.DevicePageResponseData;
+import com.example.demo.device.dto.EdgeDeviceBindRequestResponseData;
 import com.example.demo.device.dto.ReassignDeviceVehicleRequest;
 import com.example.demo.device.dto.RotateDeviceTokenResponseData;
 import com.example.demo.device.dto.UpdateDeviceRequest;
 import com.example.demo.device.entity.Device;
 import com.example.demo.device.entity.EdgeDeviceBindRequest;
+import com.example.demo.device.entity.EdgeDeviceBindRequestHistory;
+import com.example.demo.device.model.EdgeDeviceBindRequestHistoryAction;
 import com.example.demo.device.model.EdgeDeviceBindRequestStatus;
 import com.example.demo.device.model.EdgeDeviceBindStatus;
+import com.example.demo.device.model.EdgeDeviceEffectiveStage;
+import com.example.demo.device.model.EdgeDeviceEnterpriseBindStatus;
+import com.example.demo.device.model.EdgeDeviceLifecycleStatus;
+import com.example.demo.device.model.EdgeDeviceSessionStage;
 import com.example.demo.device.model.EdgeDeviceStatus;
+import com.example.demo.device.model.EdgeDeviceVehicleBindStatus;
 import com.example.demo.device.repository.DeviceRepository;
+import com.example.demo.device.repository.EdgeDeviceBindRequestHistoryRepository;
 import com.example.demo.device.repository.EdgeDeviceBindRequestRepository;
 import com.example.demo.driver.entity.Driver;
 import com.example.demo.driver.repository.DriverRepository;
@@ -51,6 +61,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -59,6 +70,7 @@ public class DeviceService {
     private static final int DEFAULT_PAGE = 1;
     private static final int DEFAULT_SIZE = 20;
     private static final int MAX_SIZE = 100;
+    private static final String SYSTEM_OPERATOR_NAME = "系统";
 
     private final DeviceRepository deviceRepository;
     private final VehicleRepository vehicleRepository;
@@ -67,6 +79,7 @@ public class DeviceService {
     private final FleetRepository fleetRepository;
     private final DriverRepository driverRepository;
     private final EdgeDeviceBindRequestRepository edgeDeviceBindRequestRepository;
+    private final EdgeDeviceBindRequestHistoryRepository edgeDeviceBindRequestHistoryRepository;
     private final BusinessAccessService businessAccessService;
     private final SystemAuditService systemAuditService;
     private final EdgeConfigVersionResolver edgeConfigVersionResolver;
@@ -78,6 +91,7 @@ public class DeviceService {
                          FleetRepository fleetRepository,
                          DriverRepository driverRepository,
                          EdgeDeviceBindRequestRepository edgeDeviceBindRequestRepository,
+                         EdgeDeviceBindRequestHistoryRepository edgeDeviceBindRequestHistoryRepository,
                          BusinessAccessService businessAccessService,
                          SystemAuditService systemAuditService,
                          EdgeConfigVersionResolver edgeConfigVersionResolver) {
@@ -88,12 +102,13 @@ public class DeviceService {
         this.fleetRepository = fleetRepository;
         this.driverRepository = driverRepository;
         this.edgeDeviceBindRequestRepository = edgeDeviceBindRequestRepository;
+        this.edgeDeviceBindRequestHistoryRepository = edgeDeviceBindRequestHistoryRepository;
         this.businessAccessService = businessAccessService;
         this.systemAuditService = systemAuditService;
         this.edgeConfigVersionResolver = edgeConfigVersionResolver;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public DevicePageResponseData listDevices(AuthenticatedUser operator, Integer page, Integer size, Long enterpriseId, Long fleetId, Long vehicleId) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
@@ -108,7 +123,7 @@ public class DeviceService {
                 result.getContent().stream().map(device -> toListItem(device, refs)).toList());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public DeviceDetailResponseData getDevice(AuthenticatedUser operator, Long deviceId) {
         Device device = getDeviceEntity(deviceId);
         assertCanAccessDevice(operator, device);
@@ -171,22 +186,47 @@ public class DeviceService {
     public DeviceDetailResponseData reassignVehicle(AuthenticatedUser operator, Long deviceId, ReassignDeviceVehicleRequest request) {
         Device device = getDeviceEntity(deviceId);
         assertCanAccessDevice(operator, device);
+        DeviceViewRefs refs = loadDeviceViewRefs(List.of(device));
+        DeviceState state = buildDeviceState(device, refs);
+        assertEnterpriseApprovedOrThrow(state.enterpriseBindStatus());
+        assertNoActiveSession(device);
+
         Vehicle vehicle = getVehicleEntity(request.vehicleId());
-        if (device.getEnterpriseId() == null) {
-            throw new BusinessException(ApiCode.DEVICE_NOT_BOUND_ENTERPRISE, ApiCode.DEVICE_NOT_BOUND_ENTERPRISE.getMessage());
-        }
         if (!vehicle.getEnterpriseId().equals(device.getEnterpriseId())) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "vehicleId不属于当前enterprise");
         }
+        validateVehicleAvailability(vehicle.getId(), device.getId());
+
         Map<String, Object> before = snapshot(device);
         device.setFleetId(vehicle.getFleetId());
         device.setVehicleId(vehicle.getId());
         if (!EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
-            device.setStatus(EdgeDeviceStatus.VEHICLE_BOUND.name());
+            device.setStatus(deriveBoundStatus(device).name());
         }
         Device saved = deviceRepository.save(device);
         systemAuditService.record(operator, "DEVICE", "REASSIGN_DEVICE_VEHICLE", "DEVICE", String.valueOf(saved.getId()),
                 "SUCCESS", "调整设备绑定车辆", auditDetail(operator, saved, before, snapshot(saved)));
+        return toDetail(saved, loadDeviceViewRefs(List.of(saved)));
+    }
+
+    @Transactional
+    public DeviceDetailResponseData unassignVehicle(AuthenticatedUser operator, Long deviceId) {
+        Device device = getDeviceEntity(deviceId);
+        assertCanAccessDevice(operator, device);
+        DeviceViewRefs refs = loadDeviceViewRefs(List.of(device));
+        DeviceState state = buildDeviceState(device, refs);
+        assertEnterpriseApprovedOrThrow(state.enterpriseBindStatus());
+        assertNoActiveSession(device);
+
+        Map<String, Object> before = snapshot(device);
+        device.setFleetId(null);
+        device.setVehicleId(null);
+        if (!EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
+            device.setStatus(deriveBoundStatus(device).name());
+        }
+        Device saved = deviceRepository.save(device);
+        systemAuditService.record(operator, "DEVICE", "UNASSIGN_DEVICE_VEHICLE", "DEVICE", String.valueOf(saved.getId()),
+                "SUCCESS", "取消设备车辆分配", auditDetail(operator, saved, before, snapshot(saved)));
         return toDetail(saved, loadDeviceViewRefs(List.of(saved)));
     }
 
@@ -217,12 +257,7 @@ public class DeviceService {
         device.setDeviceToken(generateSecretToken());
         device.setLastActivatedAt(now);
         device.setTokenRotatedAt(now);
-        if (device.getEnterpriseId() == null) {
-            device.setStatus(EdgeDeviceStatus.ACTIVATED.name());
-        } else if (!EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
-            device.setStatus(deriveBoundStatus(device).name());
-        }
-        deviceRepository.save(device);
+        syncDeviceStatusAfterBindRequestChange(device, currentBindRequestStatus(device));
         systemAuditService.record(null, "DEVICE", "DEVICE_ACTIVATE", "DEVICE", String.valueOf(device.getId()),
                 "SUCCESS", "设备激活", Map.of("deviceId", device.getId(), "deviceCode", device.getDeviceCode()));
         return new DeviceActivateResponseData(device.getId(), device.getDeviceCode(), device.getDeviceName(), device.getDeviceToken(),
@@ -232,33 +267,54 @@ public class DeviceService {
     @Transactional
     public DeviceContextResponseData getContext(String deviceCode, String deviceToken) {
         Device device = authenticateAndTouch(deviceCode, deviceToken).device();
-        String currentRequestStatus = currentBindRequestStatus(device);
-        assertEnterpriseBoundOrThrow(device, currentRequestStatus);
-        Enterprise enterprise = enterpriseRepository.findById(device.getEnterpriseId()).orElse(null);
-        Fleet fleet = device.getFleetId() == null ? null : fleetRepository.findById(device.getFleetId()).orElse(null);
-        Vehicle vehicle = device.getVehicleId() == null ? null : vehicleRepository.findById(device.getVehicleId()).orElse(null);
-        DrivingSession session = drivingSessionRepository.findFirstByDeviceIdAndStatusOrderBySignInTimeDesc(device.getId(), SessionStatus.ACTIVE.getCode()).orElse(null);
-        Driver driver = session == null ? null : driverRepository.findById(session.getDriverId()).orElse(null);
+        DeviceViewRefs refs = loadDeviceViewRefs(List.of(device));
+        DeviceState state = buildDeviceState(device, refs);
+        Enterprise enterprise = refs.enterprisesById().get(device.getEnterpriseId());
+        Fleet fleet = refs.fleetsById().get(device.getFleetId());
+        Vehicle vehicle = refs.vehiclesById().get(device.getVehicleId());
+        EdgeDeviceBindRequest currentBindRequest = refs.latestBindRequestsByDeviceId().get(device.getId());
+        DrivingSession activeSession = refs.activeSessionsByDeviceId().get(device.getId());
+        Driver currentDriver = activeSession == null ? null : refs.driversById().get(activeSession.getDriverId());
+        Enterprise requestedEnterprise = currentBindRequest == null
+                ? null
+                : enterpriseRepository.findById(currentBindRequest.getRequestedEnterpriseId()).orElse(null);
         return new DeviceContextResponseData(
                 device.getId(),
                 device.getDeviceCode(),
                 device.getDeviceName(),
                 device.getStatus(),
-                resolveBindStatus(device, currentRequestStatus).name(),
-                currentRequestStatus,
+                resolveBindStatus(state.enterpriseBindStatus()).name(),
+                currentBindRequest == null ? null : currentBindRequest.getStatus(),
+                new DeviceBindingViewData.ContextDeviceData(
+                        device.getId(),
+                        device.getDeviceCode(),
+                        device.getDeviceName(),
+                        state.lifecycleStatus().name(),
+                        toOffsetDateTime(device.getLastActivatedAt()),
+                        toOffsetDateTime(device.getLastSeenAt())),
+                state.lifecycleStatus().name(),
+                state.enterpriseBindStatus().name(),
+                state.vehicleBindStatus().name(),
+                state.sessionStage().name(),
+                state.effectiveStage().name(),
+                toNamedResourceData(enterprise),
+                toNamedResourceData(fleet),
+                toVehicleData(vehicle),
+                toBindRequestSummary(currentBindRequest, device, requestedEnterprise, state.effectiveStage()),
+                toSessionData(activeSession),
                 device.getEnterpriseId(),
                 enterprise == null ? null : enterprise.getName(),
                 device.getFleetId(),
                 fleet == null ? null : fleet.getName(),
                 device.getVehicleId(),
                 vehicle == null ? null : vehicle.getPlateNumber(),
-                driver == null ? null : driver.getId(),
-                driver == null ? null : driver.getDriverCode(),
-                driver == null ? null : driver.getName(),
-                session == null ? null : session.getId(),
-                session == null ? null : session.getSessionNo(),
-                session == null ? null : toOffsetDateTime(session.getSignInTime()),
-                session == null ? null : session.getStatus(),
+                currentDriver == null ? null : currentDriver.getId(),
+                currentDriver == null ? null : currentDriver.getDriverCode(),
+                currentDriver == null ? null : currentDriver.getName(),
+                activeSession == null ? null : activeSession.getId(),
+                activeSession == null ? null : activeSession.getSessionNo(),
+                activeSession == null ? null : toOffsetDateTime(activeSession.getSignInTime()),
+                activeSession == null ? null : activeSession.getStatus(),
                 edgeConfigVersionResolver.resolveCurrentVersion());
     }
 
@@ -284,8 +340,8 @@ public class DeviceService {
         if (device.getLastActivatedAt() == null) {
             throw new BusinessException(ApiCode.DEVICE_NOT_ACTIVATED, ApiCode.DEVICE_NOT_ACTIVATED.getMessage());
         }
-        String currentRequestStatus = currentBindRequestStatus(device);
-        assertEnterpriseBoundOrThrow(device, currentRequestStatus);
+        EdgeDeviceEnterpriseBindStatus enterpriseBindStatus = resolveEnterpriseBindStatus(device, currentBindRequestStatus(device));
+        assertEnterpriseApprovedOrThrow(enterpriseBindStatus);
         if (device.getVehicleId() == null) {
             throw new BusinessException(ApiCode.DEVICE_NOT_BOUND_VEHICLE, ApiCode.DEVICE_NOT_BOUND_VEHICLE.getMessage());
         }
@@ -293,50 +349,97 @@ public class DeviceService {
 
     @Transactional
     public void syncDeviceStatusAfterBindRequestChange(Device device) {
-        if (EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
-            return;
-        }
-        String requestStatus = currentBindRequestStatus(device);
-        if (device.getEnterpriseId() == null && EdgeDeviceBindRequestStatus.PENDING.name().equals(requestStatus)) {
-            device.setStatus(EdgeDeviceStatus.PENDING_ENTERPRISE_APPROVAL.name());
-        } else if (device.getEnterpriseId() != null) {
-            device.setStatus(deriveBoundStatus(device).name());
-        } else if (device.getLastActivatedAt() != null) {
-            device.setStatus(EdgeDeviceStatus.ACTIVATED.name());
-        } else {
-            device.setStatus(EdgeDeviceStatus.NEW.name());
-        }
-        deviceRepository.save(device);
+        syncDeviceStatusAfterBindRequestChange(device, currentBindRequestStatus(device));
     }
 
     @Transactional
     public String currentBindRequestStatus(Device device) {
         EdgeDeviceBindRequest request = edgeDeviceBindRequestRepository.findTopByDeviceIdOrderByCreatedAtDesc(device.getId()).orElse(null);
-        if (request == null) {
-            return null;
-        }
-        if (EdgeDeviceBindRequestStatus.PENDING.name().equals(request.getStatus())
-                && request.getExpiresAt() != null
-                && request.getExpiresAt().isBefore(LocalDateTime.now(ZoneOffset.UTC))) {
-            request.setStatus(EdgeDeviceBindRequestStatus.EXPIRED.name());
-            request.setUpdatedAt(LocalDateTime.now(ZoneOffset.UTC));
-            edgeDeviceBindRequestRepository.save(request);
-            syncDeviceStatusAfterBindRequestChange(device);
-        }
-        return request.getStatus();
+        EdgeDeviceBindRequest refreshed = refreshBindRequestIfExpired(device, request);
+        return refreshed == null ? null : refreshed.getStatus();
     }
 
-    public EdgeDeviceBindStatus resolveBindStatus(Device device, String currentRequestStatus) {
+    @Transactional
+    public EdgeDeviceBindRequest refreshBindRequestIfExpired(Device device, EdgeDeviceBindRequest bindRequest) {
+        if (bindRequest == null) {
+            return null;
+        }
+        if (EdgeDeviceBindRequestStatus.PENDING.name().equals(bindRequest.getStatus())
+                && bindRequest.getExpiresAt() != null
+                && bindRequest.getExpiresAt().isBefore(LocalDateTime.now(ZoneOffset.UTC))) {
+            LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+            bindRequest.setStatus(EdgeDeviceBindRequestStatus.EXPIRED.name());
+            bindRequest.setReviewedAt(now);
+            bindRequest.setReviewedBy(null);
+            bindRequest.setUpdatedAt(now);
+            EdgeDeviceBindRequest saved = edgeDeviceBindRequestRepository.save(bindRequest);
+            appendBindRequestHistory(saved.getId(), EdgeDeviceBindRequestHistoryAction.EXPIRED, null, SYSTEM_OPERATOR_NAME, "绑定申请已过期", now);
+            syncDeviceStatusAfterBindRequestChange(device, saved.getStatus());
+            return saved;
+        }
+        return bindRequest;
+    }
+
+    public EdgeDeviceBindStatus resolveBindStatus(EdgeDeviceEnterpriseBindStatus enterpriseBindStatus) {
+        return switch (enterpriseBindStatus) {
+            case APPROVED -> EdgeDeviceBindStatus.BOUND;
+            case PENDING -> EdgeDeviceBindStatus.PENDING;
+            case REJECTED -> EdgeDeviceBindStatus.REJECTED;
+            case UNBOUND, EXPIRED -> EdgeDeviceBindStatus.UNBOUND;
+        };
+    }
+
+    public EdgeDeviceLifecycleStatus resolveLifecycleStatus(Device device) {
+        if (EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
+            return EdgeDeviceLifecycleStatus.DISABLED;
+        }
+        if (device.getLastActivatedAt() == null) {
+            return EdgeDeviceLifecycleStatus.NEW;
+        }
+        return EdgeDeviceLifecycleStatus.ACTIVATED;
+    }
+
+    public EdgeDeviceEnterpriseBindStatus resolveEnterpriseBindStatus(Device device, String currentBindRequestStatus) {
         if (device.getEnterpriseId() != null) {
-            return EdgeDeviceBindStatus.BOUND;
+            return EdgeDeviceEnterpriseBindStatus.APPROVED;
         }
-        if (EdgeDeviceBindRequestStatus.PENDING.name().equals(currentRequestStatus)) {
-            return EdgeDeviceBindStatus.PENDING;
+        if (!StringUtils.hasText(currentBindRequestStatus)) {
+            return EdgeDeviceEnterpriseBindStatus.UNBOUND;
         }
-        if (EdgeDeviceBindRequestStatus.REJECTED.name().equals(currentRequestStatus)) {
-            return EdgeDeviceBindStatus.REJECTED;
+        return switch (EdgeDeviceBindRequestStatus.valueOf(currentBindRequestStatus)) {
+            case PENDING -> EdgeDeviceEnterpriseBindStatus.PENDING;
+            case APPROVED -> EdgeDeviceEnterpriseBindStatus.APPROVED;
+            case REJECTED -> EdgeDeviceEnterpriseBindStatus.REJECTED;
+            case EXPIRED -> EdgeDeviceEnterpriseBindStatus.EXPIRED;
+            case CANCELED -> EdgeDeviceEnterpriseBindStatus.UNBOUND;
+        };
+    }
+
+    public EdgeDeviceVehicleBindStatus resolveVehicleBindStatus(Device device) {
+        return device.getVehicleId() == null ? EdgeDeviceVehicleBindStatus.UNASSIGNED : EdgeDeviceVehicleBindStatus.ASSIGNED;
+    }
+
+    public EdgeDeviceSessionStage resolveSessionStage(DrivingSession activeSession) {
+        return activeSession == null ? EdgeDeviceSessionStage.IDLE : EdgeDeviceSessionStage.ACTIVE;
+    }
+
+    public EdgeDeviceEffectiveStage resolveEffectiveStage(EdgeDeviceLifecycleStatus lifecycleStatus,
+                                                          EdgeDeviceEnterpriseBindStatus enterpriseBindStatus,
+                                                          EdgeDeviceVehicleBindStatus vehicleBindStatus,
+                                                          EdgeDeviceSessionStage sessionStage) {
+        if (lifecycleStatus == EdgeDeviceLifecycleStatus.DISABLED) {
+            return EdgeDeviceEffectiveStage.DISABLED;
         }
-        return EdgeDeviceBindStatus.UNBOUND;
+        if (sessionStage == EdgeDeviceSessionStage.ACTIVE) {
+            return EdgeDeviceEffectiveStage.IN_SESSION;
+        }
+        return switch (enterpriseBindStatus) {
+            case UNBOUND, REJECTED, EXPIRED -> EdgeDeviceEffectiveStage.APPLY_BIND;
+            case PENDING -> EdgeDeviceEffectiveStage.PENDING_APPROVAL;
+            case APPROVED -> vehicleBindStatus == EdgeDeviceVehicleBindStatus.ASSIGNED
+                    ? EdgeDeviceEffectiveStage.READY_SIGN_IN
+                    : EdgeDeviceEffectiveStage.WAITING_VEHICLE;
+        };
     }
 
     private Device authenticateDevice(String deviceCode, String deviceToken) {
@@ -418,6 +521,7 @@ public class DeviceService {
             if (fleetId != null && !fleetId.equals(vehicle.getFleetId())) {
                 throw new BusinessException(ApiCode.INVALID_PARAM, "fleetId与vehicleId不匹配");
             }
+            validateVehicleAvailability(vehicle.getId(), null);
             return new BindingResolution(vehicle.getEnterpriseId(), vehicle.getFleetId(), vehicle.getId());
         }
         if (fleetId != null) {
@@ -439,11 +543,39 @@ public class DeviceService {
         return new BindingResolution(null, null, null);
     }
 
+    private void validateVehicleAvailability(Long vehicleId, Long currentDeviceId) {
+        Optional<Device> occupiedBy = deviceRepository.findByVehicleId(vehicleId);
+        if (occupiedBy.isPresent() && !occupiedBy.get().getId().equals(currentDeviceId)) {
+            throw new BusinessException(ApiCode.VEHICLE_ALREADY_BOUND, ApiCode.VEHICLE_ALREADY_BOUND.getMessage());
+        }
+    }
+
+    private void assertNoActiveSession(Device device) {
+        if (drivingSessionRepository.findFirstByDeviceIdAndStatusOrderBySignInTimeDesc(device.getId(), SessionStatus.ACTIVE.getCode()).isPresent()) {
+            throw new BusinessException(ApiCode.DEVICE_ACTIVE_SESSION_CONFLICT, ApiCode.DEVICE_ACTIVE_SESSION_CONFLICT.getMessage());
+        }
+    }
+
+    private void assertEnterpriseApprovedOrThrow(EdgeDeviceEnterpriseBindStatus enterpriseBindStatus) {
+        switch (enterpriseBindStatus) {
+            case APPROVED -> {
+                return;
+            }
+            case PENDING -> throw new BusinessException(ApiCode.DEVICE_BIND_PENDING, ApiCode.DEVICE_BIND_PENDING.getMessage());
+            case REJECTED -> throw new BusinessException(ApiCode.DEVICE_BIND_REJECTED, ApiCode.DEVICE_BIND_REJECTED.getMessage());
+            case EXPIRED -> throw new BusinessException(ApiCode.DEVICE_BIND_EXPIRED, ApiCode.DEVICE_BIND_EXPIRED.getMessage());
+            case UNBOUND -> throw new BusinessException(ApiCode.DEVICE_NOT_BOUND_ENTERPRISE, ApiCode.DEVICE_NOT_BOUND_ENTERPRISE.getMessage());
+        }
+    }
+
     private DeviceListItemData toListItem(Device device, DeviceViewRefs refs) {
         DrivingSession activeSession = refs.activeSessionsByDeviceId().get(device.getId());
         Driver currentDriver = activeSession == null ? null : refs.driversById().get(activeSession.getDriverId());
+        DeviceState state = buildDeviceState(device, refs);
         return new DeviceListItemData(device.getId(), device.getEnterpriseId(), device.getFleetId(), device.getVehicleId(),
                 device.getDeviceCode(), device.getDeviceName(), device.getActivationCode(), device.getStatus(),
+                state.lifecycleStatus().name(), state.enterpriseBindStatus().name(), state.vehicleBindStatus().name(),
+                state.sessionStage().name(), state.effectiveStage().name(),
                 toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getLastSeenAt()), toOffsetDateTime(device.getTokenRotatedAt()),
                 currentDriver == null ? null : currentDriver.getId(),
                 currentDriver == null ? null : currentDriver.getDriverCode(),
@@ -454,24 +586,47 @@ public class DeviceService {
     }
 
     private DeviceDetailResponseData toDetail(Device device, DeviceViewRefs refs) {
+        Enterprise enterprise = refs.enterprisesById().get(device.getEnterpriseId());
+        Fleet fleet = refs.fleetsById().get(device.getFleetId());
+        Vehicle vehicle = refs.vehiclesById().get(device.getVehicleId());
         DrivingSession activeSession = refs.activeSessionsByDeviceId().get(device.getId());
         Driver currentDriver = activeSession == null ? null : refs.driversById().get(activeSession.getDriverId());
+        DeviceState state = buildDeviceState(device, refs);
         return new DeviceDetailResponseData(device.getId(), device.getEnterpriseId(), device.getFleetId(), device.getVehicleId(),
                 device.getDeviceCode(), device.getDeviceName(), device.getActivationCode(), device.getStatus(),
+                state.lifecycleStatus().name(), state.enterpriseBindStatus().name(), state.vehicleBindStatus().name(),
+                state.sessionStage().name(), state.effectiveStage().name(),
+                toNamedResourceData(enterprise), toNamedResourceData(fleet), toVehicleData(vehicle),
                 toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getLastSeenAt()), toOffsetDateTime(device.getTokenRotatedAt()),
                 currentDriver == null ? null : currentDriver.getId(),
                 currentDriver == null ? null : currentDriver.getDriverCode(),
                 currentDriver == null ? null : currentDriver.getName(),
                 activeSession == null ? null : activeSession.getId(),
+                currentDriver == null ? null : new DeviceBindingViewData.DriverData(currentDriver.getId(), currentDriver.getDriverCode(), currentDriver.getName()),
+                toSessionData(activeSession),
                 device.getRemark(),
                 toOffsetDateTime(device.getCreatedAt()), toOffsetDateTime(device.getUpdatedAt()));
     }
 
     private DeviceViewRefs loadDeviceViewRefs(Collection<Device> devices) {
         if (devices.isEmpty()) {
-            return new DeviceViewRefs(Map.of(), Map.of());
+            return new DeviceViewRefs(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
         }
         List<Long> deviceIds = devices.stream().map(Device::getId).toList();
+
+        Map<Long, EdgeDeviceBindRequest> latestBindRequestsByDeviceId = new HashMap<>();
+        for (EdgeDeviceBindRequest bindRequest : edgeDeviceBindRequestRepository.findByDeviceIdInOrderByDeviceIdAscCreatedAtDesc(deviceIds)) {
+            if (bindRequest.getDeviceId() != null) {
+                latestBindRequestsByDeviceId.putIfAbsent(bindRequest.getDeviceId(), bindRequest);
+            }
+        }
+        for (Device device : devices) {
+            EdgeDeviceBindRequest bindRequest = latestBindRequestsByDeviceId.get(device.getId());
+            if (bindRequest != null) {
+                latestBindRequestsByDeviceId.put(device.getId(), refreshBindRequestIfExpired(device, bindRequest));
+            }
+        }
+
         Map<Long, DrivingSession> activeSessionsByDeviceId = new HashMap<>();
         for (DrivingSession session : drivingSessionRepository.findByStatusAndDeviceIdInOrderBySignInTimeDesc(SessionStatus.ACTIVE.getCode(), deviceIds)) {
             if (session.getDeviceId() != null) {
@@ -479,31 +634,141 @@ public class DeviceService {
             }
         }
 
-        List<Long> driverIds = activeSessionsByDeviceId.values().stream().map(DrivingSession::getDriverId).toList();
+        List<Long> driverIds = activeSessionsByDeviceId.values().stream().map(DrivingSession::getDriverId).filter(id -> id != null).toList();
         Map<Long, Driver> driversById = new HashMap<>();
         for (Driver driver : driverRepository.findAllById(driverIds)) {
             if (driver.getId() != null) {
                 driversById.put(driver.getId(), driver);
             }
         }
-        return new DeviceViewRefs(activeSessionsByDeviceId, driversById);
+
+        List<Long> enterpriseIds = devices.stream().map(Device::getEnterpriseId).filter(id -> id != null).distinct().toList();
+        Map<Long, Enterprise> enterprisesById = new HashMap<>();
+        for (Enterprise enterprise : enterpriseRepository.findAllById(enterpriseIds)) {
+            if (enterprise.getId() != null) {
+                enterprisesById.put(enterprise.getId(), enterprise);
+            }
+        }
+
+        List<Long> fleetIds = devices.stream().map(Device::getFleetId).filter(id -> id != null).distinct().toList();
+        Map<Long, Fleet> fleetsById = new HashMap<>();
+        for (Fleet fleet : fleetRepository.findAllById(fleetIds)) {
+            if (fleet.getId() != null) {
+                fleetsById.put(fleet.getId(), fleet);
+            }
+        }
+
+        List<Long> vehicleIds = devices.stream().map(Device::getVehicleId).filter(id -> id != null).distinct().toList();
+        Map<Long, Vehicle> vehiclesById = new HashMap<>();
+        for (Vehicle vehicle : vehicleRepository.findAllById(vehicleIds)) {
+            if (vehicle.getId() != null) {
+                vehiclesById.put(vehicle.getId(), vehicle);
+            }
+        }
+
+        return new DeviceViewRefs(enterprisesById, fleetsById, vehiclesById, latestBindRequestsByDeviceId, activeSessionsByDeviceId, driversById);
     }
 
-    private void assertEnterpriseBoundOrThrow(Device device, String currentRequestStatus) {
-        if (device.getEnterpriseId() != null) {
-            return;
-        }
-        if (EdgeDeviceBindRequestStatus.PENDING.name().equals(currentRequestStatus)) {
-            throw new BusinessException(ApiCode.DEVICE_BIND_PENDING, ApiCode.DEVICE_BIND_PENDING.getMessage());
-        }
-        if (EdgeDeviceBindRequestStatus.REJECTED.name().equals(currentRequestStatus)) {
-            throw new BusinessException(ApiCode.DEVICE_BIND_REJECTED, ApiCode.DEVICE_BIND_REJECTED.getMessage());
-        }
-        throw new BusinessException(ApiCode.DEVICE_NOT_BOUND_ENTERPRISE, ApiCode.DEVICE_NOT_BOUND_ENTERPRISE.getMessage());
+    private DeviceState buildDeviceState(Device device, DeviceViewRefs refs) {
+        EdgeDeviceBindRequest latestBindRequest = refs.latestBindRequestsByDeviceId().get(device.getId());
+        DrivingSession activeSession = refs.activeSessionsByDeviceId().get(device.getId());
+        String currentRequestStatus = latestBindRequest == null ? null : latestBindRequest.getStatus();
+        EdgeDeviceLifecycleStatus lifecycleStatus = resolveLifecycleStatus(device);
+        EdgeDeviceEnterpriseBindStatus enterpriseBindStatus = resolveEnterpriseBindStatus(device, currentRequestStatus);
+        EdgeDeviceVehicleBindStatus vehicleBindStatus = resolveVehicleBindStatus(device);
+        EdgeDeviceSessionStage sessionStage = resolveSessionStage(activeSession);
+        EdgeDeviceEffectiveStage effectiveStage = resolveEffectiveStage(lifecycleStatus, enterpriseBindStatus, vehicleBindStatus, sessionStage);
+        return new DeviceState(lifecycleStatus, enterpriseBindStatus, vehicleBindStatus, sessionStage, effectiveStage);
     }
 
     private EdgeDeviceStatus deriveBoundStatus(Device device) {
         return device.getVehicleId() == null ? EdgeDeviceStatus.ENTERPRISE_BOUND : EdgeDeviceStatus.VEHICLE_BOUND;
+    }
+
+    private void syncDeviceStatusAfterBindRequestChange(Device device, String requestStatus) {
+        if (EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
+            deviceRepository.save(device);
+            return;
+        }
+        if (device.getEnterpriseId() == null && EdgeDeviceBindRequestStatus.PENDING.name().equals(requestStatus)) {
+            device.setStatus(EdgeDeviceStatus.PENDING_ENTERPRISE_APPROVAL.name());
+        } else if (device.getEnterpriseId() != null) {
+            device.setStatus(deriveBoundStatus(device).name());
+        } else if (device.getLastActivatedAt() != null) {
+            device.setStatus(EdgeDeviceStatus.ACTIVATED.name());
+        } else {
+            device.setStatus(EdgeDeviceStatus.NEW.name());
+        }
+        deviceRepository.save(device);
+    }
+
+    private DeviceBindingViewData.NamedResourceData toNamedResourceData(Enterprise enterprise) {
+        return enterprise == null ? null : new DeviceBindingViewData.NamedResourceData(enterprise.getId(), enterprise.getName());
+    }
+
+    private DeviceBindingViewData.NamedResourceData toNamedResourceData(Fleet fleet) {
+        return fleet == null ? null : new DeviceBindingViewData.NamedResourceData(fleet.getId(), fleet.getName());
+    }
+
+    private DeviceBindingViewData.VehicleData toVehicleData(Vehicle vehicle) {
+        return vehicle == null ? null : new DeviceBindingViewData.VehicleData(vehicle.getId(), vehicle.getPlateNumber());
+    }
+
+    private DeviceBindingViewData.SessionData toSessionData(DrivingSession activeSession) {
+        return activeSession == null ? null : new DeviceBindingViewData.SessionData(
+                activeSession.getId(),
+                activeSession.getSessionNo(),
+                toOffsetDateTime(activeSession.getSignInTime()),
+                activeSession.getStatus());
+    }
+
+    private EdgeDeviceBindRequestResponseData toBindRequestSummary(EdgeDeviceBindRequest bindRequest,
+                                                                  Device device,
+                                                                  Enterprise requestedEnterprise,
+                                                                  EdgeDeviceEffectiveStage effectiveStage) {
+        if (bindRequest == null) {
+            return null;
+        }
+        return new EdgeDeviceBindRequestResponseData(
+                bindRequest.getId(),
+                bindRequest.getDeviceId(),
+                bindRequest.getDeviceCode(),
+                device.getDeviceName(),
+                device.getActivationCode(),
+                bindRequest.getRequestedEnterpriseId(),
+                bindRequest.getRequestedEnterpriseId(),
+                requestedEnterprise == null ? null : requestedEnterprise.getName(),
+                bindRequest.getStatus(),
+                bindRequest.getApplyRemark(),
+                bindRequest.getApproveRemark(),
+                bindRequest.getRejectReason(),
+                bindRequest.getApproveRemark() != null ? bindRequest.getApproveRemark() : bindRequest.getRejectReason(),
+                toOffsetDateTime(bindRequest.getSubmittedAt()),
+                toOffsetDateTime(bindRequest.getReviewedAt()),
+                bindRequest.getReviewedBy(),
+                toOffsetDateTime(bindRequest.getExpiresAt()),
+                toOffsetDateTime(bindRequest.getCreatedAt()),
+                toOffsetDateTime(bindRequest.getUpdatedAt()),
+                toOffsetDateTime(device.getLastSeenAt()),
+                effectiveStage.name(),
+                null,
+                null);
+    }
+
+    private void appendBindRequestHistory(Long bindRequestId,
+                                          EdgeDeviceBindRequestHistoryAction action,
+                                          Long operatorId,
+                                          String operatorName,
+                                          String remark,
+                                          LocalDateTime createdAt) {
+        EdgeDeviceBindRequestHistory history = new EdgeDeviceBindRequestHistory();
+        history.setBindRequestId(bindRequestId);
+        history.setAction(action.name());
+        history.setOperatorId(operatorId);
+        history.setOperatorName(operatorName);
+        history.setRemark(remark);
+        history.setCreatedAt(createdAt);
+        edgeDeviceBindRequestHistoryRepository.save(history);
     }
 
     private Map<String, Object> snapshot(Device device) {
@@ -588,6 +853,10 @@ public class DeviceService {
     }
 
     private record DeviceViewRefs(
+            Map<Long, Enterprise> enterprisesById,
+            Map<Long, Fleet> fleetsById,
+            Map<Long, Vehicle> vehiclesById,
+            Map<Long, EdgeDeviceBindRequest> latestBindRequestsByDeviceId,
             Map<Long, DrivingSession> activeSessionsByDeviceId,
             Map<Long, Driver> driversById
     ) {
@@ -597,6 +866,15 @@ public class DeviceService {
             Long enterpriseId,
             Long fleetId,
             Long vehicleId
+    ) {
+    }
+
+    private record DeviceState(
+            EdgeDeviceLifecycleStatus lifecycleStatus,
+            EdgeDeviceEnterpriseBindStatus enterpriseBindStatus,
+            EdgeDeviceVehicleBindStatus vehicleBindStatus,
+            EdgeDeviceSessionStage sessionStage,
+            EdgeDeviceEffectiveStage effectiveStage
     ) {
     }
 }

@@ -32,8 +32,11 @@ public class EdgeDeviceBindRequest {
     @Column(name = "apply_remark", length = 255)
     private String applyRemark;
 
-    @Column(name = "review_remark", length = 255)
-    private String reviewRemark;
+    @Column(name = "approve_remark", length = 255)
+    private String approveRemark;
+
+    @Column(name = "reject_reason", length = 255)
+    private String rejectReason;
 
     @Column(name = "submitted_at", nullable = false)
     private LocalDateTime submittedAt;
@@ -101,12 +104,20 @@ public class EdgeDeviceBindRequest {
         this.applyRemark = applyRemark;
     }
 
-    public String getReviewRemark() {
-        return reviewRemark;
+    public String getApproveRemark() {
+        return approveRemark;
     }
 
-    public void setReviewRemark(String reviewRemark) {
-        this.reviewRemark = reviewRemark;
+    public void setApproveRemark(String approveRemark) {
+        this.approveRemark = approveRemark;
+    }
+
+    public String getRejectReason() {
+        return rejectReason;
+    }
+
+    public void setRejectReason(String rejectReason) {
+        this.rejectReason = rejectReason;
     }
 
     public LocalDateTime getSubmittedAt() {

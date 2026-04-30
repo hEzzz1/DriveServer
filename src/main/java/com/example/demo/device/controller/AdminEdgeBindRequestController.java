@@ -3,9 +3,10 @@ package com.example.demo.device.controller;
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.auth.security.EnterpriseAdminOrSuperAdmin;
 import com.example.demo.common.api.ApiResponse;
+import com.example.demo.device.dto.ApproveEdgeDeviceBindRequest;
 import com.example.demo.device.dto.EdgeDeviceBindRequestPageResponseData;
 import com.example.demo.device.dto.EdgeDeviceBindRequestResponseData;
-import com.example.demo.device.dto.ReviewEdgeDeviceBindRequest;
+import com.example.demo.device.dto.RejectEdgeDeviceBindRequest;
 import com.example.demo.device.service.EdgeDeviceBindRequestService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -47,7 +48,7 @@ public class AdminEdgeBindRequestController {
     @PostMapping("/{id}/approve")
     @EnterpriseAdminOrSuperAdmin
     public ApiResponse<EdgeDeviceBindRequestResponseData> approve(@PathVariable Long id,
-                                                                  @Valid @RequestBody(required = false) ReviewEdgeDeviceBindRequest request,
+                                                                  @Valid @RequestBody(required = false) ApproveEdgeDeviceBindRequest request,
                                                                   Authentication authentication) {
         return ApiResponse.success(edgeDeviceBindRequestService.approve(currentUser(authentication), id, request));
     }
@@ -55,7 +56,7 @@ public class AdminEdgeBindRequestController {
     @PostMapping("/{id}/reject")
     @EnterpriseAdminOrSuperAdmin
     public ApiResponse<EdgeDeviceBindRequestResponseData> reject(@PathVariable Long id,
-                                                                 @Valid @RequestBody(required = false) ReviewEdgeDeviceBindRequest request,
+                                                                 @Valid @RequestBody RejectEdgeDeviceBindRequest request,
                                                                  Authentication authentication) {
         return ApiResponse.success(edgeDeviceBindRequestService.reject(currentUser(authentication), id, request));
     }

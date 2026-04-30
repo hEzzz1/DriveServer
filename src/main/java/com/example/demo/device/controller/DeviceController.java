@@ -14,6 +14,7 @@ import com.example.demo.device.dto.UpdateDeviceStatusRequest;
 import com.example.demo.device.service.DeviceService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -78,6 +79,12 @@ public class DeviceController {
                                                                  @Valid @RequestBody ReassignDeviceVehicleRequest request,
                                                                  Authentication authentication) {
         return ApiResponse.success(deviceService.reassignVehicle(currentUser(authentication), id, request));
+    }
+
+    @DeleteMapping("/{id}/vehicle")
+    @EnterpriseAdminOrSuperAdmin
+    public ApiResponse<DeviceDetailResponseData> unassignVehicle(@PathVariable Long id, Authentication authentication) {
+        return ApiResponse.success(deviceService.unassignVehicle(currentUser(authentication), id));
     }
 
     @PostMapping("/{id}/rotate-token")

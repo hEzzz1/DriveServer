@@ -23,7 +23,7 @@ public class Device {
     @Column(name = "fleet_id")
     private Long fleetId;
 
-    @Column(name = "vehicle_id")
+    @Column(name = "vehicle_id", unique = true)
     private Long vehicleId;
 
     @Column(name = "device_code", nullable = false, length = 64, unique = true)

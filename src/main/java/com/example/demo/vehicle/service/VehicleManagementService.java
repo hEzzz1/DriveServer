@@ -227,7 +227,10 @@ public class VehicleManagementService {
         List<Long> vehicleIds = vehicles.stream().map(Vehicle::getId).toList();
         for (Device device : deviceRepository.findByVehicleIdInOrderByStatusDescIdDesc(vehicleIds)) {
             if (device.getVehicleId() != null) {
-                result.putIfAbsent(device.getVehicleId(), device);
+                Device existing = result.putIfAbsent(device.getVehicleId(), device);
+                if (existing != null && !existing.getId().equals(device.getId())) {
+                    throw new IllegalStateException("存在多台设备绑定同一车辆: vehicleId=" + device.getVehicleId());
+                }
             }
         }
         return result;
