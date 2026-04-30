@@ -178,7 +178,8 @@ class AuthModuleIntegrationTest {
     @Test
     void auditEndpointsShouldSplitPlatformAndOrgScopes() throws Exception {
         SystemAuditLog visible = saveAuditLog(savedEnterprise.getId(), savedEnterprise.getId(), "USER", "CREATE_USER");
-        SystemAuditLog hidden = saveAuditLog(otherEnterprise.getId(), otherEnterprise.getId(), "USER", "CREATE_USER");
+        SystemAuditLog hidden = saveAuditLog(otherEnterprise.getId(), otherEnterprise.getId(), "ALERT", "CONFIRM_ALERT");
+        SystemAuditLog platformVisible = saveAuditLog(null, null, "USER", "CREATE_INTERNAL_USER");
 
         String enterpriseAdminToken = loginAndGetToken("enterprise-admin", "123456");
         String adminToken = loginAndGetToken("admin", "123456");
@@ -208,9 +209,10 @@ class AuthModuleIntegrationTest {
 
         mockMvc.perform(get("/api/v1/platform/audit")
                         .header("Authorization", "Bearer " + adminToken)
-                        .queryParam("module", "USER"))
+                        .queryParam("actionType", "CREATE_INTERNAL_USER"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(2));
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].id").value(platformVisible.getId()));
     }
 
     @Test

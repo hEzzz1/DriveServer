@@ -34,6 +34,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class SystemAuditService {
@@ -41,6 +42,21 @@ public class SystemAuditService {
     private static final int DEFAULT_PAGE = 1;
     private static final int DEFAULT_SIZE = 20;
     private static final int MAX_SIZE = 200;
+    private static final Set<String> PLATFORM_GOVERNANCE_MODULES = Set.of("SYSTEM", "AUDIT", "RULE");
+    private static final Set<String> PLATFORM_GOVERNANCE_ACTION_TYPES = Set.of(
+            "CREATE_ENTERPRISE",
+            "UPDATE_ENTERPRISE",
+            "UPDATE_ENTERPRISE_STATUS",
+            "CREATE_ENTERPRISE_ADMIN",
+            "UPDATE_ENTERPRISE_ADMIN_PROFILE",
+            "UPDATE_ENTERPRISE_ADMIN_ROLES",
+            "UPDATE_ENTERPRISE_ADMIN_STATUS",
+            "RESET_ENTERPRISE_ADMIN_PASSWORD",
+            "CREATE_INTERNAL_USER",
+            "UPDATE_INTERNAL_USER_PROFILE",
+            "UPDATE_INTERNAL_USER_ROLES",
+            "UPDATE_INTERNAL_USER_STATUS",
+            "RESET_INTERNAL_USER_PASSWORD");
 
     private final SystemAuditRepository systemAuditRepository;
     private final UserAccountRepository userAccountRepository;
@@ -186,13 +202,30 @@ public class SystemAuditService {
                                                        Integer page,
                                                        Integer size) {
         businessAccessService.assertPlatformAdmin(operator);
-        return list(module, actionType, targetType, targetId, actionBy, startTime, endTime, page, size);
+        int pageNo = normalizePage(page);
+        int pageSize = normalizeSize(size);
+        LocalDateTime startUtc = startTime == null ? null : LocalDateTime.ofInstant(startTime.toInstant(), ZoneOffset.UTC);
+        LocalDateTime endUtc = endTime == null ? null : LocalDateTime.ofInstant(endTime.toInstant(), ZoneOffset.UTC);
+        if (startUtc != null && endUtc != null && startUtc.isAfter(endUtc)) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "startTime不能晚于endTime");
+        }
+        Specification<SystemAuditLog> specification = buildPlatformGovernanceSpecification(
+                module, actionType, targetType, targetId, actionBy, startUtc, endUtc);
+        Page<SystemAuditLog> pageResult = systemAuditRepository.findAll(
+                specification,
+                PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.DESC, "actionTime").and(Sort.by(Sort.Direction.DESC, "id"))));
+        List<SystemAuditListItemData> items = pageResult.getContent().stream().map(this::toListItem).toList();
+        return new SystemAuditPageResponseData(pageResult.getTotalElements(), pageNo, pageSize, items);
     }
 
     @Transactional(readOnly = true)
     public SystemAuditDetailData getDetailForPlatform(AuthenticatedUser operator, Long id) {
         businessAccessService.assertPlatformAdmin(operator);
-        return getDetail(id);
+        SystemAuditLog log = getLog(id);
+        if (!isPlatformGovernanceLog(log)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
+        return toDetail(log);
     }
 
     @Transactional(readOnly = true)
@@ -205,7 +238,18 @@ public class SystemAuditService {
                                                            OffsetDateTime startTime,
                                                            OffsetDateTime endTime) {
         businessAccessService.assertPlatformAdmin(operator);
-        return export(module, actionType, targetType, targetId, actionBy, startTime, endTime);
+        LocalDateTime startUtc = startTime == null ? null : LocalDateTime.ofInstant(startTime.toInstant(), ZoneOffset.UTC);
+        LocalDateTime endUtc = endTime == null ? null : LocalDateTime.ofInstant(endTime.toInstant(), ZoneOffset.UTC);
+        if (startUtc != null && endUtc != null && startUtc.isAfter(endUtc)) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "startTime不能晚于endTime");
+        }
+        List<SystemAuditListItemData> items = systemAuditRepository.findAll(
+                        buildPlatformGovernanceSpecification(module, actionType, targetType, targetId, actionBy, startUtc, endUtc),
+                        Sort.by(Sort.Direction.DESC, "actionTime").and(Sort.by(Sort.Direction.DESC, "id")))
+                .stream()
+                .map(this::toListItem)
+                .toList();
+        return new SystemAuditExportResponseData(OffsetDateTime.now(ZoneOffset.UTC), items.size(), items);
     }
 
     @Transactional(readOnly = true)
@@ -309,6 +353,19 @@ public class SystemAuditService {
         return specifications.stream().reduce(Specification.where(null), Specification::and);
     }
 
+    private Specification<SystemAuditLog> buildPlatformGovernanceSpecification(String module,
+                                                                               String actionType,
+                                                                               String targetType,
+                                                                               String targetId,
+                                                                               Long actionBy,
+                                                                               LocalDateTime startTime,
+                                                                               LocalDateTime endTime) {
+        return buildSpecification(module, actionType, targetType, targetId, actionBy, startTime, endTime, null)
+                .and((root, query, cb) -> cb.or(
+                        root.get("module").in(PLATFORM_GOVERNANCE_MODULES),
+                        root.get("actionType").in(PLATFORM_GOVERNANCE_ACTION_TYPES)));
+    }
+
     private SystemAuditDetailData toDetail(SystemAuditLog log) {
         return new SystemAuditDetailData(
                 log.getId(),
@@ -345,6 +402,14 @@ public class SystemAuditService {
 
     private boolean belongsToEnterprise(SystemAuditLog log, Long enterpriseId) {
         return enterpriseId != null && (enterpriseId.equals(log.getOperatorEnterpriseId()) || enterpriseId.equals(log.getTargetEnterpriseId()));
+    }
+
+    private boolean isPlatformGovernanceLog(SystemAuditLog log) {
+        if (log == null) {
+            return false;
+        }
+        return PLATFORM_GOVERNANCE_MODULES.contains(log.getModule())
+                || PLATFORM_GOVERNANCE_ACTION_TYPES.contains(log.getActionType());
     }
 
     private Long resolveOperatorEnterpriseId(AuthenticatedUser operator) {
