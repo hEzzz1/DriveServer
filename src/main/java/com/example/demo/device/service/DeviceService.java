@@ -272,12 +272,8 @@ public class DeviceService {
         Enterprise enterprise = refs.enterprisesById().get(device.getEnterpriseId());
         Fleet fleet = refs.fleetsById().get(device.getFleetId());
         Vehicle vehicle = refs.vehiclesById().get(device.getVehicleId());
-        EdgeDeviceBindRequest currentBindRequest = refs.latestBindRequestsByDeviceId().get(device.getId());
         DrivingSession activeSession = refs.activeSessionsByDeviceId().get(device.getId());
         Driver currentDriver = activeSession == null ? null : refs.driversById().get(activeSession.getDriverId());
-        Enterprise requestedEnterprise = currentBindRequest == null
-                ? null
-                : enterpriseRepository.findById(currentBindRequest.getRequestedEnterpriseId()).orElse(null);
         return new DeviceContextResponseData(
                 device.getId(),
                 device.getDeviceCode(),
@@ -595,22 +591,9 @@ public class DeviceService {
 
     private DeviceViewRefs loadDeviceViewRefs(Collection<Device> devices) {
         if (devices.isEmpty()) {
-            return new DeviceViewRefs(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
+            return new DeviceViewRefs(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
         }
         List<Long> deviceIds = devices.stream().map(Device::getId).toList();
-
-        Map<Long, EdgeDeviceBindRequest> latestBindRequestsByDeviceId = new HashMap<>();
-        for (EdgeDeviceBindRequest bindRequest : edgeDeviceBindRequestRepository.findByDeviceIdInOrderByDeviceIdAscCreatedAtDesc(deviceIds)) {
-            if (bindRequest.getDeviceId() != null) {
-                latestBindRequestsByDeviceId.putIfAbsent(bindRequest.getDeviceId(), bindRequest);
-            }
-        }
-        for (Device device : devices) {
-            EdgeDeviceBindRequest bindRequest = latestBindRequestsByDeviceId.get(device.getId());
-            if (bindRequest != null) {
-                latestBindRequestsByDeviceId.put(device.getId(), refreshBindRequestIfExpired(device, bindRequest));
-            }
-        }
 
         Map<Long, DrivingSession> activeSessionsByDeviceId = new HashMap<>();
         for (DrivingSession session : drivingSessionRepository.findByStatusAndDeviceIdInOrderBySignInTimeDesc(SessionStatus.ACTIVE.getCode(), deviceIds)) {
@@ -651,15 +634,13 @@ public class DeviceService {
             }
         }
 
-        return new DeviceViewRefs(enterprisesById, fleetsById, vehiclesById, latestBindRequestsByDeviceId, activeSessionsByDeviceId, driversById);
+        return new DeviceViewRefs(enterprisesById, fleetsById, vehiclesById, activeSessionsByDeviceId, driversById);
     }
 
     private DeviceState buildDeviceState(Device device, DeviceViewRefs refs) {
-        EdgeDeviceBindRequest latestBindRequest = refs.latestBindRequestsByDeviceId().get(device.getId());
         DrivingSession activeSession = refs.activeSessionsByDeviceId().get(device.getId());
-        String currentRequestStatus = latestBindRequest == null ? null : latestBindRequest.getStatus();
         EdgeDeviceLifecycleStatus lifecycleStatus = resolveLifecycleStatus(device);
-        EdgeDeviceEnterpriseBindStatus enterpriseBindStatus = resolveEnterpriseBindStatus(device, currentRequestStatus);
+        EdgeDeviceEnterpriseBindStatus enterpriseBindStatus = resolveEnterpriseBindStatus(device, null);
         EdgeDeviceVehicleBindStatus vehicleBindStatus = resolveVehicleBindStatus(device);
         EdgeDeviceSessionStage sessionStage = resolveSessionStage(activeSession);
         EdgeDeviceEffectiveStage effectiveStage = resolveEffectiveStage(lifecycleStatus, enterpriseBindStatus, vehicleBindStatus, sessionStage);
@@ -837,7 +818,6 @@ public class DeviceService {
             Map<Long, Enterprise> enterprisesById,
             Map<Long, Fleet> fleetsById,
             Map<Long, Vehicle> vehiclesById,
-            Map<Long, EdgeDeviceBindRequest> latestBindRequestsByDeviceId,
             Map<Long, DrivingSession> activeSessionsByDeviceId,
             Map<Long, Driver> driversById
     ) {

@@ -77,6 +77,8 @@ public class EdgeDeviceClaimService {
             device.setDeviceCode(deviceCode);
             device.setCreatedAt(now);
             device.setStatus(EdgeDeviceStatus.NEW.name());
+        } else if (EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "设备已禁用");
         } else if (device.getEnterpriseId() != null && !device.getEnterpriseId().equals(enterprise.getId())) {
             throw new BusinessException(ApiCode.DEVICE_BOUND_TO_OTHER_ENTERPRISE, ApiCode.DEVICE_BOUND_TO_OTHER_ENTERPRISE.getMessage());
         } else if (device.getEnterpriseId() != null) {

@@ -161,6 +161,112 @@ class EdgeDeviceClaimIntegrationTest {
     }
 
     @Test
+    void contextShouldReflectClaimedDeviceStage() throws Exception {
+        String claimJson = mockMvc.perform(post("/api/v1/edge/device/claim")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "deviceCode": "EDGE-0003",
+                                  "deviceName": "后挡摄像头C",
+                                  "enterpriseActivationCode": "ENT-AAAA-1111"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode claimData = objectMapper.readTree(claimJson).path("data");
+        String deviceCode = claimData.path("device").path("deviceCode").asText();
+        String deviceToken = claimData.path("device").path("deviceToken").asText();
+
+        mockMvc.perform(get("/api/v1/edge/device/context")
+                        .header("X-Device-Code", deviceCode)
+                        .header("X-Device-Token", deviceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.device.deviceCode").value("EDGE-0003"))
+                .andExpect(jsonPath("$.data.device.lifecycleStatus").value("BOUND"))
+                .andExpect(jsonPath("$.data.enterprise.id").value(enterpriseA.getId()))
+                .andExpect(jsonPath("$.data.vehicleBindStatus").value("UNASSIGNED"))
+                .andExpect(jsonPath("$.data.sessionStage").value("IDLE"))
+                .andExpect(jsonPath("$.data.effectiveStage").value("WAITING_VEHICLE"));
+    }
+
+    @Test
+    void claimShouldValidateEnterpriseActivationCodeStatus() throws Exception {
+        mockMvc.perform(post("/api/v1/edge/device/claim")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "deviceCode": "EDGE-0004",
+                                  "deviceName": "前挡摄像头D",
+                                  "enterpriseActivationCode": "ENT-NOT-EXIST"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(40908));
+
+        enterpriseA.setActivationCodeStatus(EnterpriseActivationCodeStatus.DISABLED.name());
+        enterpriseA.setUpdatedAt(LocalDateTime.now());
+        enterpriseRepository.save(enterpriseA);
+
+        mockMvc.perform(post("/api/v1/edge/device/claim")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "deviceCode": "EDGE-0004",
+                                  "deviceName": "前挡摄像头D",
+                                  "enterpriseActivationCode": "ENT-AAAA-1111"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(40910));
+
+        enterpriseA.setActivationCodeStatus(EnterpriseActivationCodeStatus.ACTIVE.name());
+        enterpriseA.setActivationCodeExpiresAt(LocalDateTime.now().minusDays(1));
+        enterpriseA.setUpdatedAt(LocalDateTime.now());
+        enterpriseRepository.save(enterpriseA);
+
+        mockMvc.perform(post("/api/v1/edge/device/claim")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "deviceCode": "EDGE-0004",
+                                  "deviceName": "前挡摄像头D",
+                                  "enterpriseActivationCode": "ENT-AAAA-1111"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(40909));
+    }
+
+    @Test
+    void claimShouldRejectDisabledDevice() throws Exception {
+        Device device = new Device();
+        device.setEnterpriseId(enterpriseA.getId());
+        device.setDeviceCode("EDGE-0005");
+        device.setDeviceName("停用设备");
+        device.setStatus("DISABLED");
+        device.setCreatedAt(LocalDateTime.now());
+        device.setUpdatedAt(LocalDateTime.now());
+        deviceRepository.save(device);
+
+        mockMvc.perform(post("/api/v1/edge/device/claim")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "deviceCode": "EDGE-0005",
+                                  "deviceName": "停用设备",
+                                  "enterpriseActivationCode": "ENT-AAAA-1111"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(40301));
+
+        assertThat(edgeDeviceBindLogRepository.findAll()).isEmpty();
+    }
+
+    @Test
     void enterpriseAdminShouldManageOwnActivationCode() throws Exception {
         String token = loginAndGetToken("enterprise-admin", "123456");
 

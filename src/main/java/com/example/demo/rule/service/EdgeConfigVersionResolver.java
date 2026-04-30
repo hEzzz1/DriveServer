@@ -1,6 +1,5 @@
 package com.example.demo.rule.service;
 
-import com.example.demo.rule.entity.RuleConfig;
 import com.example.demo.rule.repository.RuleConfigRepository;
 import org.springframework.stereotype.Service;
 
@@ -41,7 +40,7 @@ public class EdgeConfigVersionResolver {
     }
 
     private String loadCurrentVersion() {
-        Object[] summary = ruleConfigRepository.summarizeActiveRuleset();
+        Object[] summary = normalizeSummary(ruleConfigRepository.summarizeActiveRuleset());
         long activeCount = toLong(summary, 0);
         if (activeCount <= 0) {
             return "ruleset/empty";
@@ -51,6 +50,16 @@ public class EdgeConfigVersionResolver {
         LocalDateTime publishedAt = toLocalDateTime(summary, 2);
         long publishedAtEpochSecond = publishedAt == null ? 0L : publishedAt.toEpochSecond(ZoneOffset.UTC);
         return "ruleset/" + activeCount + "/" + maxVersion + "/" + publishedAtEpochSecond;
+    }
+
+    private Object[] normalizeSummary(Object[] summary) {
+        if (summary == null) {
+            return null;
+        }
+        if (summary.length == 1 && summary[0] instanceof Object[] nested) {
+            return nested;
+        }
+        return summary;
     }
 
     private long toLong(Object[] values, int index) {
