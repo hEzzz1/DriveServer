@@ -14,7 +14,10 @@ import com.example.demo.alert.model.AlertActionType;
 import com.example.demo.alert.model.AlertStatus;
 import com.example.demo.alert.repository.AlertActionLogRepository;
 import com.example.demo.alert.repository.AlertEventRepository;
+import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.auth.service.BusinessAccessService;
+import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.system.service.SystemAuditService;
@@ -48,19 +51,25 @@ public class AlertService {
     private final AlertActionLogRepository alertActionLogRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final SystemAuditService systemAuditService;
+    private final BusinessAccessService businessAccessService;
 
     public AlertService(AlertEventRepository alertEventRepository,
                         AlertActionLogRepository alertActionLogRepository,
                         ApplicationEventPublisher applicationEventPublisher,
-                        SystemAuditService systemAuditService) {
+                        SystemAuditService systemAuditService,
+                        BusinessAccessService businessAccessService) {
         this.alertEventRepository = alertEventRepository;
         this.alertActionLogRepository = alertActionLogRepository;
         this.applicationEventPublisher = applicationEventPublisher;
         this.systemAuditService = systemAuditService;
+        this.businessAccessService = businessAccessService;
     }
 
     @Transactional
     public AlertOperationResponseData createAlert(CreateAlertRequest request, AuthenticatedUser operator) {
+        if (operator.getSubjectType() == SubjectType.USER) {
+            businessAccessService.assertCanAccessData(operator, request.getEnterpriseId(), request.getFleetId());
+        }
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String normalizedRemark = normalizeRemark(request.getRemark());
 
@@ -129,10 +138,9 @@ public class AlertService {
     }
 
     @Transactional(readOnly = true)
-    public AlertActionLogsResponseData listActionLogs(Long alertId) {
-        if (!alertEventRepository.existsById(alertId)) {
-            throw new BusinessException(ApiCode.NOT_FOUND, ApiCode.NOT_FOUND.getMessage());
-        }
+    public AlertActionLogsResponseData listActionLogs(Long alertId, AuthenticatedUser operator) {
+        AlertEvent alert = getAlertOrThrow(alertId);
+        businessAccessService.assertCanAccessData(operator, alert.getEnterpriseId(), alert.getFleetId());
         List<AlertActionLogItemData> items = alertActionLogRepository.findByAlertIdOrderByActionTimeAscIdAsc(alertId).stream()
                 .map(log -> new AlertActionLogItemData(
                         log.getId(),
@@ -147,6 +155,7 @@ public class AlertService {
     @Transactional(readOnly = true)
     public AlertPageResponseData listAlerts(Integer page,
                                             Integer size,
+                                            AuthenticatedUser operator,
                                             Long fleetId,
                                             Long vehicleId,
                                             Long driverId,
@@ -162,8 +171,9 @@ public class AlertService {
             throw new BusinessException(ApiCode.INVALID_PARAM, "startTime不能晚于endTime");
         }
 
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, null, fleetId);
         Specification<AlertEvent> specification = buildListSpecification(
-                fleetId, vehicleId, driverId, riskLevel, status, startTimeUtc, endTimeUtc);
+                dataScope, vehicleId, driverId, riskLevel, status, startTimeUtc, endTimeUtc);
         PageRequest pageable = PageRequest.of(
                 pageNo - 1,
                 pageSize,
@@ -177,8 +187,9 @@ public class AlertService {
     }
 
     @Transactional(readOnly = true)
-    public AlertDetailResponseData getAlertDetail(Long alertId) {
+    public AlertDetailResponseData getAlertDetail(Long alertId, AuthenticatedUser operator) {
         AlertEvent alert = getAlertOrThrow(alertId);
+        businessAccessService.assertCanAccessData(operator, alert.getEnterpriseId(), alert.getFleetId());
         return new AlertDetailResponseData(
                 alert.getId(),
                 alert.getAlertNo(),
@@ -203,6 +214,7 @@ public class AlertService {
                                                   String remark,
                                                   AuthenticatedUser operator) {
         AlertEvent alert = getAlertOrThrow(alertId);
+        businessAccessService.assertCanAccessData(operator, alert.getEnterpriseId(), alert.getFleetId());
         AlertStatus currentStatus = AlertStatus.fromCode(alert.getStatus());
         if (!canTransit(currentStatus, targetStatus)) {
             throw new BusinessException(ApiCode.INVALID_PARAM, INVALID_TRANSITION_MESSAGE);
@@ -309,17 +321,15 @@ public class AlertService {
                 toOffsetDateTime(alert.getTriggerTime()));
     }
 
-    private Specification<AlertEvent> buildListSpecification(Long fleetId,
-                                                              Long vehicleId,
-                                                              Long driverId,
-                                                              Integer riskLevel,
-                                                              Integer status,
-                                                              LocalDateTime startTime,
-                                                              LocalDateTime endTime) {
+    private Specification<AlertEvent> buildListSpecification(BusinessDataScope dataScope,
+                                                             Long vehicleId,
+                                                             Long driverId,
+                                                             Integer riskLevel,
+                                                             Integer status,
+                                                             LocalDateTime startTime,
+                                                             LocalDateTime endTime) {
         List<Specification<AlertEvent>> specifications = new ArrayList<>();
-        if (fleetId != null) {
-            specifications.add((root, query, cb) -> cb.equal(root.get("fleetId"), fleetId));
-        }
+        specifications.add((root, query, cb) -> dataScope.toPredicate(root, cb, "enterpriseId", "fleetId"));
         if (vehicleId != null) {
             specifications.add((root, query, cb) -> cb.equal(root.get("vehicleId"), vehicleId));
         }

@@ -1,8 +1,6 @@
 package com.example.demo.fleet.controller;
 
 import com.example.demo.auth.security.AuthenticatedUser;
-import com.example.demo.auth.security.EnterpriseAdminOrSuperAdmin;
-import com.example.demo.auth.security.EnterpriseReadRole;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.fleet.dto.CreateFleetRequest;
 import com.example.demo.fleet.dto.FleetDetailResponseData;
@@ -11,6 +9,7 @@ import com.example.demo.fleet.dto.UpdateFleetRequest;
 import com.example.demo.fleet.dto.UpdateFleetStatusRequest;
 import com.example.demo.fleet.service.FleetManagementService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,7 +31,7 @@ public class FleetController {
     }
 
     @GetMapping
-    @EnterpriseReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'fleet.read')")
     public ApiResponse<FleetPageResponseData> listFleets(@RequestParam(required = false) Integer page,
                                                          @RequestParam(required = false) Integer size,
                                                          @RequestParam(required = false) Long enterpriseId,
@@ -42,20 +41,20 @@ public class FleetController {
     }
 
     @GetMapping("/{id}")
-    @EnterpriseReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'fleet.read')")
     public ApiResponse<FleetDetailResponseData> getFleet(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(fleetManagementService.getFleet(currentUser(authentication), id));
     }
 
     @PostMapping
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'fleet.manage')")
     public ApiResponse<FleetDetailResponseData> createFleet(@Valid @RequestBody CreateFleetRequest request,
                                                             Authentication authentication) {
         return ApiResponse.success(fleetManagementService.createFleet(currentUser(authentication), request));
     }
 
     @PutMapping("/{id}")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'fleet.manage')")
     public ApiResponse<FleetDetailResponseData> updateFleet(@PathVariable Long id,
                                                             @Valid @RequestBody UpdateFleetRequest request,
                                                             Authentication authentication) {
@@ -63,7 +62,7 @@ public class FleetController {
     }
 
     @PutMapping("/{id}/status")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'fleet.manage')")
     public ApiResponse<FleetDetailResponseData> updateFleetStatus(@PathVariable Long id,
                                                                   @Valid @RequestBody UpdateFleetStatusRequest request,
                                                                   Authentication authentication) {

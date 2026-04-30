@@ -1,8 +1,6 @@
 package com.example.demo.device.controller;
 
 import com.example.demo.auth.security.AuthenticatedUser;
-import com.example.demo.auth.security.EnterpriseAdminOrSuperAdmin;
-import com.example.demo.auth.security.EnterpriseReadRole;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.device.dto.CreateDeviceRequest;
 import com.example.demo.device.dto.DeviceDetailResponseData;
@@ -13,6 +11,7 @@ import com.example.demo.device.dto.UpdateDeviceRequest;
 import com.example.demo.device.dto.UpdateDeviceStatusRequest;
 import com.example.demo.device.service.DeviceService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,7 +34,7 @@ public class DeviceController {
     }
 
     @GetMapping
-    @EnterpriseReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.read')")
     public ApiResponse<DevicePageResponseData> listDevices(@RequestParam(required = false) Integer page,
                                                            @RequestParam(required = false) Integer size,
                                                            @RequestParam(required = false) Long enterpriseId,
@@ -46,19 +45,19 @@ public class DeviceController {
     }
 
     @GetMapping("/{id}")
-    @EnterpriseReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.read')")
     public ApiResponse<DeviceDetailResponseData> getDevice(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(deviceService.getDevice(currentUser(authentication), id));
     }
 
     @PostMapping
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.manage')")
     public ApiResponse<DeviceDetailResponseData> createDevice(@Valid @RequestBody CreateDeviceRequest request, Authentication authentication) {
         return ApiResponse.success(deviceService.createDevice(currentUser(authentication), request));
     }
 
     @PutMapping("/{id}")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.manage')")
     public ApiResponse<DeviceDetailResponseData> updateDevice(@PathVariable Long id,
                                                               @Valid @RequestBody UpdateDeviceRequest request,
                                                               Authentication authentication) {
@@ -66,7 +65,7 @@ public class DeviceController {
     }
 
     @PutMapping("/{id}/status")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.manage')")
     public ApiResponse<DeviceDetailResponseData> updateDeviceStatus(@PathVariable Long id,
                                                                     @Valid @RequestBody UpdateDeviceStatusRequest request,
                                                                     Authentication authentication) {
@@ -74,7 +73,7 @@ public class DeviceController {
     }
 
     @PutMapping("/{id}/vehicle")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.manage')")
     public ApiResponse<DeviceDetailResponseData> reassignVehicle(@PathVariable Long id,
                                                                  @Valid @RequestBody ReassignDeviceVehicleRequest request,
                                                                  Authentication authentication) {
@@ -82,13 +81,13 @@ public class DeviceController {
     }
 
     @DeleteMapping("/{id}/vehicle")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.manage')")
     public ApiResponse<DeviceDetailResponseData> unassignVehicle(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(deviceService.unassignVehicle(currentUser(authentication), id));
     }
 
     @PostMapping("/{id}/rotate-token")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.manage')")
     public ApiResponse<RotateDeviceTokenResponseData> rotateToken(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(deviceService.rotateToken(currentUser(authentication), id));
     }

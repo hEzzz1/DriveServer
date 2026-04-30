@@ -1,7 +1,6 @@
 package com.example.demo.system.controller;
 
 import com.example.demo.auth.security.AuthenticatedUser;
-import com.example.demo.auth.security.SystemAdminOrSuperAdmin;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.system.dto.SystemAuditDetailData;
 import com.example.demo.system.dto.SystemAuditExportResponseData;
@@ -14,6 +13,7 @@ import com.example.demo.system.dto.SystemVersionResponseData;
 import com.example.demo.system.service.SystemAuditService;
 import com.example.demo.system.service.SystemManagementService;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,37 +36,37 @@ public class SystemController {
     }
 
     @GetMapping("/system/health")
-    @SystemAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'system.read')")
     public ApiResponse<SystemHealthResponseData> health() {
         return ApiResponse.success(systemManagementService.getHealth());
     }
 
     @GetMapping("/system/services")
-    @SystemAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'system.read')")
     public ApiResponse<SystemServicesResponseData> services() {
         return ApiResponse.success(systemManagementService.getServices());
     }
 
     @GetMapping("/system/version")
-    @SystemAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'system.read')")
     public ApiResponse<SystemVersionResponseData> version() {
         return ApiResponse.success(systemManagementService.getVersion());
     }
 
     @GetMapping("/system/monitoring")
-    @SystemAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'system.read')")
     public ApiResponse<SystemMonitoringResponseData> monitoring() {
         return ApiResponse.success(systemManagementService.getMonitoring());
     }
 
     @GetMapping("/system/summary")
-    @SystemAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'system.read')")
     public ApiResponse<SystemSummaryResponseData> summary() {
         return ApiResponse.success(systemManagementService.getSummary());
     }
 
     @GetMapping("/audits")
-    @SystemAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'audit.read')")
     public ApiResponse<SystemAuditPageResponseData> audits(@RequestParam(required = false) String module,
                                                            @RequestParam(required = false) String actionType,
                                                            @RequestParam(required = false) String targetType,
@@ -80,13 +80,13 @@ public class SystemController {
     }
 
     @GetMapping("/audits/{id}")
-    @SystemAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'audit.read')")
     public ApiResponse<SystemAuditDetailData> auditDetail(@PathVariable Long id) {
         return ApiResponse.success(systemAuditService.getDetail(id));
     }
 
     @GetMapping("/audits/export")
-    @SystemAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'audit.export')")
     public ApiResponse<SystemAuditExportResponseData> exportAudits(@RequestParam(required = false) String module,
                                                                    @RequestParam(required = false) String actionType,
                                                                    @RequestParam(required = false) String targetType,

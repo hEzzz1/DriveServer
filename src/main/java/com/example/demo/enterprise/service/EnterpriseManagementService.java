@@ -1,6 +1,7 @@
 package com.example.demo.enterprise.service;
 
 import com.example.demo.auth.service.BusinessAccessService;
+import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
@@ -57,10 +58,11 @@ public class EnterpriseManagementService {
                                                       Byte status) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, null, null);
         Specification<Enterprise> specification = buildSpecification(
                 keyword,
                 normalizeStatus(status, true),
-                businessAccessService.resolveReadableEnterpriseId(operator, null));
+                dataScope);
         Page<Enterprise> result = enterpriseRepository.findAll(
                 specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
@@ -75,13 +77,13 @@ public class EnterpriseManagementService {
     @Transactional(readOnly = true)
     public EnterpriseDetailResponseData getEnterprise(AuthenticatedUser operator, Long enterpriseId) {
         Enterprise enterprise = getEnterpriseEntity(enterpriseId);
-        businessAccessService.resolveReadableEnterpriseId(operator, enterprise.getId());
+        businessAccessService.assertCanAccessEnterprise(operator, enterprise.getId());
         return toDetail(enterprise);
     }
 
     @Transactional
     public EnterpriseDetailResponseData createEnterprise(AuthenticatedUser operator, CreateEnterpriseRequest request) {
-        assertSuperAdmin(operator);
+        assertPlatformScope(operator);
         String code = normalizeRequired(request.code(), "code不能为空");
         if (enterpriseRepository.existsByCode(code)) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "企业编码已存在");
@@ -105,7 +107,7 @@ public class EnterpriseManagementService {
 
     @Transactional
     public EnterpriseDetailResponseData updateEnterprise(AuthenticatedUser operator, Long enterpriseId, UpdateEnterpriseRequest request) {
-        assertSuperAdmin(operator);
+        assertPlatformScope(operator);
         Enterprise enterprise = getEnterpriseEntity(enterpriseId);
         Map<String, Object> before = snapshot(enterprise);
         String code = normalizeRequired(request.code(), "code不能为空");
@@ -125,7 +127,7 @@ public class EnterpriseManagementService {
 
     @Transactional
     public EnterpriseDetailResponseData updateStatus(AuthenticatedUser operator, Long enterpriseId, Byte status) {
-        assertSuperAdmin(operator);
+        assertPlatformScope(operator);
         Enterprise enterprise = getEnterpriseEntity(enterpriseId);
         Map<String, Object> before = snapshot(enterprise);
         enterprise.setStatus(normalizeStatus(status, false));
@@ -136,12 +138,10 @@ public class EnterpriseManagementService {
         return toDetail(saved);
     }
 
-    private Specification<Enterprise> buildSpecification(String keyword, Byte status, Long readableEnterpriseId) {
+    private Specification<Enterprise> buildSpecification(String keyword, Byte status, BusinessDataScope dataScope) {
         return (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
-            if (readableEnterpriseId != null) {
-                predicates.add(cb.equal(root.get("id"), readableEnterpriseId));
-            }
+            predicates.add(dataScope.toPredicate(root, cb, "id", null));
             if (StringUtils.hasText(keyword)) {
                 String pattern = "%" + keyword.trim() + "%";
                 predicates.add(cb.or(
@@ -160,8 +160,8 @@ public class EnterpriseManagementService {
                 .orElseThrow(() -> new BusinessException(ApiCode.NOT_FOUND, ApiCode.NOT_FOUND.getMessage()));
     }
 
-    private void assertSuperAdmin(AuthenticatedUser operator) {
-        if (!businessAccessService.isSuperAdmin(operator)) {
+    private void assertPlatformScope(AuthenticatedUser operator) {
+        if (!businessAccessService.isPlatformScoped(operator)) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
     }

@@ -1,14 +1,13 @@
 package com.example.demo.session.controller;
 
 import com.example.demo.auth.security.AuthenticatedUser;
-import com.example.demo.auth.security.EnterpriseAdminOrSuperAdmin;
-import com.example.demo.auth.security.EnterpriseReadRole;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.session.dto.ForceSignOutSessionRequest;
 import com.example.demo.session.dto.SessionAdminDetailResponseData;
 import com.example.demo.session.dto.SessionAdminPageResponseData;
 import com.example.demo.session.service.DrivingSessionService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,7 +28,7 @@ public class SessionController {
     }
 
     @GetMapping
-    @EnterpriseReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'session.read')")
     public ApiResponse<SessionAdminPageResponseData> listSessions(@RequestParam(required = false) Integer page,
                                                                   @RequestParam(required = false) Integer size,
                                                                   @RequestParam(required = false) Long enterpriseId,
@@ -41,13 +40,13 @@ public class SessionController {
     }
 
     @GetMapping("/{id}")
-    @EnterpriseReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'session.read')")
     public ApiResponse<SessionAdminDetailResponseData> getSession(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(drivingSessionService.getSession(currentUser(authentication), id));
     }
 
     @PutMapping("/{id}/force-sign-out")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'session.force_sign_out')")
     public ApiResponse<SessionAdminDetailResponseData> forceSignOut(@PathVariable Long id,
                                                                     @Valid @RequestBody(required = false) ForceSignOutSessionRequest request,
                                                                     Authentication authentication) {

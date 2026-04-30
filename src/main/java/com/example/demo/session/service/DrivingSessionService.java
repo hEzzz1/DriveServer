@@ -2,6 +2,7 @@ package com.example.demo.session.service;
 
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.auth.service.BusinessAccessService;
+import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.device.entity.Device;
@@ -181,8 +182,8 @@ public class DrivingSessionService {
                                                      String keyword) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
-        Long readableEnterpriseId = businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
-        Specification<DrivingSession> specification = buildSpecification(readableEnterpriseId, fleetId, normalizeStatus(status, true), keyword);
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, enterpriseId, fleetId);
+        Specification<DrivingSession> specification = buildSpecification(dataScope, normalizeStatus(status, true), keyword);
         Page<DrivingSession> result = drivingSessionRepository.findAll(
                 specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.DESC, "signInTime")));
@@ -197,14 +198,14 @@ public class DrivingSessionService {
     @Transactional(readOnly = true)
     public SessionAdminDetailResponseData getSession(AuthenticatedUser operator, Long sessionId) {
         DrivingSession session = getSessionEntity(sessionId);
-        businessAccessService.resolveReadableEnterpriseId(operator, session.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, session.getEnterpriseId(), session.getFleetId());
         return toAdminDetail(session, loadReferenceMaps(List.of(session)));
     }
 
     @Transactional
     public SessionAdminDetailResponseData forceSignOut(AuthenticatedUser operator, Long sessionId, String remark) {
         DrivingSession session = getSessionEntity(sessionId);
-        businessAccessService.assertCanManageEnterprise(operator, session.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, session.getEnterpriseId(), session.getFleetId());
         if (session.getStatus() == null || session.getStatus() != SessionStatus.ACTIVE.getCode()) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "当前会话已结束，无需强制签退");
         }
@@ -389,15 +390,10 @@ public class DrivingSessionService {
                 toOffsetDateTime(session.getUpdatedAt()));
     }
 
-    private Specification<DrivingSession> buildSpecification(Long enterpriseId, Long fleetId, Byte status, String keyword) {
+    private Specification<DrivingSession> buildSpecification(BusinessDataScope dataScope, Byte status, String keyword) {
         return (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
-            if (enterpriseId != null) {
-                predicates.add(cb.equal(root.get("enterpriseId"), enterpriseId));
-            }
-            if (fleetId != null) {
-                predicates.add(cb.equal(root.get("fleetId"), fleetId));
-            }
+            predicates.add(dataScope.toPredicate(root, cb, "enterpriseId", "fleetId"));
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
             }

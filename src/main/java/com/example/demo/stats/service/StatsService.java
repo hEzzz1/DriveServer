@@ -3,6 +3,9 @@ package com.example.demo.stats.service;
 import com.example.demo.alert.entity.AlertEvent;
 import com.example.demo.alert.repository.AlertEventRepository;
 import com.example.demo.alert.model.AlertStatus;
+import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.auth.service.BusinessAccessService;
+import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.stats.dto.OverviewLatestAlertItemData;
@@ -42,20 +45,24 @@ public class StatsService {
     private static final int LATEST_ALERT_LIMIT = 5;
 
     private final AlertEventRepository alertEventRepository;
+    private final BusinessAccessService businessAccessService;
 
-    public StatsService(AlertEventRepository alertEventRepository) {
+    public StatsService(AlertEventRepository alertEventRepository,
+                        BusinessAccessService businessAccessService) {
         this.alertEventRepository = alertEventRepository;
+        this.businessAccessService = businessAccessService;
     }
 
     @Transactional(readOnly = true)
-    public StatsOverviewResponseData getRealtimeOverview(Long fleetId) {
+    public StatsOverviewResponseData getRealtimeOverview(AuthenticatedUser operator, Long fleetId) {
         LocalDateTime windowEnd = LocalDateTime.now(ZoneOffset.UTC);
         LocalDateTime windowStart = windowEnd.minusMinutes(5);
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, null, fleetId);
 
         List<AlertEvent> recentAlerts = alertEventRepository.findAll(
-                buildFilterSpecification(fleetId, null, null, windowStart, windowEnd));
+                buildFilterSpecification(dataScope, null, null, windowStart, windowEnd));
         List<AlertEvent> latestAlerts = alertEventRepository.findAll(
-                buildFilterSpecification(fleetId, null, null, null, null),
+                buildFilterSpecification(dataScope, null, null, null, null),
                 PageRequest.of(0, LATEST_ALERT_LIMIT,
                         Sort.by(Sort.Direction.DESC, "triggerTime").and(Sort.by(Sort.Direction.DESC, "id"))))
                 .getContent();
@@ -88,7 +95,8 @@ public class StatsService {
     }
 
     @Transactional(readOnly = true)
-    public TrendResponseData getTrend(Long fleetId,
+    public TrendResponseData getTrend(AuthenticatedUser operator,
+                                      Long fleetId,
                                       Integer riskLevel,
                                       Integer status,
                                       OffsetDateTime startTime,
@@ -100,8 +108,9 @@ public class StatsService {
         validateRiskLevel(riskLevel);
         validateStatus(status);
 
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, null, fleetId);
         List<AlertEvent> alerts = alertEventRepository.findAll(
-                buildFilterSpecification(fleetId, riskLevel, status, startTimeUtc, endTimeUtc));
+                buildFilterSpecification(dataScope, riskLevel, status, startTimeUtc, endTimeUtc));
 
         Map<LocalDateTime, BucketAccumulator> buckets = initializeBuckets(startTimeUtc, endTimeUtc, groupBy);
         for (AlertEvent alert : alerts) {
@@ -127,7 +136,8 @@ public class StatsService {
     }
 
     @Transactional(readOnly = true)
-    public RankingResponseData getRanking(Long fleetId,
+    public RankingResponseData getRanking(AuthenticatedUser operator,
+                                          Long fleetId,
                                           Integer riskLevel,
                                           Integer status,
                                           OffsetDateTime startTime,
@@ -142,8 +152,9 @@ public class StatsService {
         validateStatus(status);
         int normalizedLimit = normalizeLimit(limit);
 
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, null, fleetId);
         List<AlertEvent> alerts = alertEventRepository.findAll(
-                buildFilterSpecification(fleetId, riskLevel, status, startTimeUtc, endTimeUtc));
+                buildFilterSpecification(dataScope, riskLevel, status, startTimeUtc, endTimeUtc));
 
         Map<Long, BucketAccumulator> dimensionBuckets = new LinkedHashMap<>();
         for (AlertEvent alert : alerts) {
@@ -188,15 +199,13 @@ public class StatsService {
                 items);
     }
 
-    private Specification<AlertEvent> buildFilterSpecification(Long fleetId,
+    private Specification<AlertEvent> buildFilterSpecification(BusinessDataScope dataScope,
                                                                Integer riskLevel,
                                                                Integer status,
                                                                LocalDateTime startTime,
                                                                LocalDateTime endTime) {
         List<Specification<AlertEvent>> specifications = new ArrayList<>();
-        if (fleetId != null) {
-            specifications.add((root, query, cb) -> cb.equal(root.get("fleetId"), fleetId));
-        }
+        specifications.add((root, query, cb) -> dataScope.toPredicate(root, cb, "enterpriseId", "fleetId"));
         if (riskLevel != null) {
             specifications.add((root, query, cb) -> cb.equal(root.get("riskLevel"), riskLevel.byteValue()));
         }

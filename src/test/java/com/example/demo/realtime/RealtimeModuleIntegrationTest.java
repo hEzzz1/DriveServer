@@ -41,6 +41,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class RealtimeModuleIntegrationTest {
 
+    private static final long ENTERPRISE_ID = 1001L;
+
     @LocalServerPort
     private int port;
 
@@ -69,7 +71,7 @@ class RealtimeModuleIntegrationTest {
         userAccountRepository.deleteAll();
 
         Role operator = saveRole("OPERATOR", "运维操作员");
-        UserAccount operatorUser = saveUser("operator", "123456", 1);
+        UserAccount operatorUser = saveUser("operator", "123456", 1, ENTERPRISE_ID);
         bindUserRole(operatorUser.getId(), operator.getId());
     }
 
@@ -180,6 +182,7 @@ class RealtimeModuleIntegrationTest {
     private String createAlertPayload() {
         return """
                 {
+                  "enterpriseId": %d,
                   "fleetId": 1001,
                   "vehicleId": 2001,
                   "driverId": 3001,
@@ -191,7 +194,7 @@ class RealtimeModuleIntegrationTest {
                   "triggerTime": "2026-04-07T10:01:16Z",
                   "remark": "系统自动创建"
                 }
-                """;
+                """.formatted(ENTERPRISE_ID);
     }
 
     private String url(String path) {
@@ -207,12 +210,13 @@ class RealtimeModuleIntegrationTest {
         return roleRepository.save(role);
     }
 
-    private UserAccount saveUser(String username, String password, int status) {
+    private UserAccount saveUser(String username, String password, int status, Long enterpriseId) {
         UserAccount user = new UserAccount();
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setNickname(username);
         user.setSubjectType(SubjectType.USER.name());
+        user.setEnterpriseId(enterpriseId);
         user.setStatus((byte) status);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());

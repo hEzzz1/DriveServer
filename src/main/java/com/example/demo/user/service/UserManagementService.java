@@ -3,12 +3,18 @@ package com.example.demo.user.service;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.auth.entity.UserScopeRole;
 import com.example.demo.auth.model.RoleCode;
+import com.example.demo.auth.model.RoleTemplateCode;
+import com.example.demo.auth.model.ScopeType;
 import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
+import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.auth.service.BusinessAccessService;
+import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.enterprise.entity.Enterprise;
@@ -57,23 +63,29 @@ public class UserManagementService {
 
     private final UserAccountRepository userAccountRepository;
     private final UserRoleRepository userRoleRepository;
+    private final UserScopeRoleRepository userScopeRoleRepository;
     private final RoleRepository roleRepository;
     private final EnterpriseRepository enterpriseRepository;
     private final PasswordEncoder passwordEncoder;
     private final SystemAuditService systemAuditService;
+    private final BusinessAccessService businessAccessService;
 
     public UserManagementService(UserAccountRepository userAccountRepository,
                                  UserRoleRepository userRoleRepository,
+                                 UserScopeRoleRepository userScopeRoleRepository,
                                  RoleRepository roleRepository,
                                  EnterpriseRepository enterpriseRepository,
                                  PasswordEncoder passwordEncoder,
-                                 SystemAuditService systemAuditService) {
+                                 SystemAuditService systemAuditService,
+                                 BusinessAccessService businessAccessService) {
         this.userAccountRepository = userAccountRepository;
         this.userRoleRepository = userRoleRepository;
+        this.userScopeRoleRepository = userScopeRoleRepository;
         this.roleRepository = roleRepository;
         this.enterpriseRepository = enterpriseRepository;
         this.passwordEncoder = passwordEncoder;
         this.systemAuditService = systemAuditService;
+        this.businessAccessService = businessAccessService;
     }
 
     @Transactional
@@ -100,6 +112,7 @@ public class UserManagementService {
         UserAccount saved = userAccountRepository.save(user);
 
         assignRoles(saved.getId(), normalizedRoles);
+        syncScopeRoles(saved, normalizedRoles);
         systemAuditService.record(operator, "USER", "CREATE_USER", "USER", String.valueOf(saved.getId()),
                 "SUCCESS", "创建用户", buildAuditDetail(currentUser, operator.getRoles(), saved, null, snapshot(saved, normalizedRoles)));
         return toDetail(saved, normalizedRoles, resolveEnterpriseName(saved.getEnterpriseId()));
@@ -123,6 +136,7 @@ public class UserManagementService {
         user.setNickname(StringUtils.hasText(request.nickname()) ? request.nickname().trim() : username);
         user.setEnterpriseId(enterpriseId);
         UserAccount saved = userAccountRepository.save(user);
+        syncScopeRoles(saved, currentRoles);
 
         systemAuditService.record(operator, "USER", "UPDATE_USER_PROFILE", "USER", String.valueOf(saved.getId()),
                 "SUCCESS", "更新用户信息", buildAuditDetail(currentUser, operator.getRoles(), saved, before, snapshot(saved, currentRoles)));
@@ -136,13 +150,12 @@ public class UserManagementService {
                                           String keyword,
                                           Boolean enabled,
                                           Long enterpriseId) {
-        UserAccount currentUser = getOperatorAccount(operator);
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
         Specification<UserAccount> specification = buildUserSpecification(
                 keyword,
                 enabled,
-                resolveVisibleEnterpriseId(operator, currentUser, enterpriseId));
+                resolveUserEnterpriseScope(operator, enterpriseId));
         Page<UserAccount> result = userAccountRepository.findAll(
                 specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
@@ -182,6 +195,7 @@ public class UserManagementService {
         List<String> normalizedRoles = validateRequestedRoles(operator, currentUser, requestedRoles);
         ensureSuperAdminRetained(user, beforeRoles, normalizedRoles);
         assignRoles(userId, normalizedRoles);
+        syncScopeRoles(user, normalizedRoles);
         systemAuditService.record(operator, "USER", "UPDATE_USER_ROLES", "USER", String.valueOf(user.getId()),
                 "SUCCESS", "更新用户角色", buildAuditDetail(currentUser, operator.getRoles(), user, before, snapshot(user, normalizedRoles)));
         return toDetail(user, normalizedRoles, resolveEnterpriseName(user.getEnterpriseId()));
@@ -250,13 +264,11 @@ public class UserManagementService {
         return user;
     }
 
-    private Specification<UserAccount> buildUserSpecification(String keyword, Boolean enabled, Long enterpriseId) {
+    private Specification<UserAccount> buildUserSpecification(String keyword, Boolean enabled, BusinessDataScope dataScope) {
         return (root, query, cb) -> {
             List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("subjectType"), SubjectType.USER.name()));
-            if (enterpriseId != null) {
-                predicates.add(cb.equal(root.get("enterpriseId"), enterpriseId));
-            }
+            predicates.add(dataScope.toPredicate(root, cb, "enterpriseId", null));
             if (StringUtils.hasText(keyword)) {
                 String pattern = "%" + keyword.trim() + "%";
                 predicates.add(cb.or(
@@ -320,11 +332,23 @@ public class UserManagementService {
         return getUserAccount(operator.getUserId());
     }
 
-    private Long resolveVisibleEnterpriseId(AuthenticatedUser operator, UserAccount currentUser, Long requestedEnterpriseId) {
-        if (isSuperAdmin(operator)) {
-            return requestedEnterpriseId;
+    private BusinessDataScope resolveUserEnterpriseScope(AuthenticatedUser operator, Long requestedEnterpriseId) {
+        BusinessDataScope scope = businessAccessService.getAuthorizationProfile(operator).dataScope();
+        if (scope.platformWide()) {
+            return requestedEnterpriseId == null
+                    ? scope
+                    : new BusinessDataScope(false, Set.of(requestedEnterpriseId), Map.of());
         }
-        return requireEnterpriseId(currentUser);
+        if (scope.enterpriseIds().isEmpty()) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
+        if (requestedEnterpriseId != null) {
+            if (scope.enterpriseIds().contains(requestedEnterpriseId)) {
+                return new BusinessDataScope(false, Set.of(requestedEnterpriseId), Map.of());
+            }
+            return new BusinessDataScope(false, scope.enterpriseIds(), Map.of());
+        }
+        return new BusinessDataScope(false, scope.enterpriseIds(), Map.of());
     }
 
     private Long resolveTargetEnterpriseId(AuthenticatedUser operator,
@@ -336,15 +360,23 @@ public class UserManagementService {
                 return requestedEnterpriseId == null ? null : requireEnterpriseExists(requestedEnterpriseId).getId();
             }
             if (requestedEnterpriseId == null) {
-                throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId不能为空");
+                Set<Long> manageableEnterpriseIds = resolveManageableEnterpriseIds(operator);
+                if (manageableEnterpriseIds.size() != 1) {
+                    throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId不能为空");
+                }
+                return manageableEnterpriseIds.iterator().next();
             }
             return requireEnterpriseExists(requestedEnterpriseId).getId();
         }
-        Long currentEnterpriseId = requireEnterpriseId(currentUser);
-        if (requestedEnterpriseId != null && !currentEnterpriseId.equals(requestedEnterpriseId)) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        if (requestedEnterpriseId != null) {
+            businessAccessService.assertCanManageEnterprise(operator, requestedEnterpriseId);
+            return requestedEnterpriseId;
         }
-        return currentEnterpriseId;
+        Set<Long> manageableEnterpriseIds = resolveManageableEnterpriseIds(operator);
+        if (manageableEnterpriseIds.size() != 1) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId不能为空");
+        }
+        return manageableEnterpriseIds.iterator().next();
     }
 
     private Long resolveUpdatedEnterpriseId(AuthenticatedUser operator,
@@ -372,7 +404,7 @@ public class UserManagementService {
         if (!normalizedRoles.stream().allMatch(role -> canAssignRole(operator, role))) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
-        if (!isSuperAdmin(operator) && currentUser.getEnterpriseId() == null) {
+        if (!isSuperAdmin(operator) && resolveManageableEnterpriseIds(operator).isEmpty()) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
         return normalizedRoles;
@@ -382,10 +414,10 @@ public class UserManagementService {
         if (isSuperAdmin(operator)) {
             return;
         }
-        Long currentEnterpriseId = requireEnterpriseId(currentUser);
-        if (!currentEnterpriseId.equals(targetUser.getEnterpriseId())) {
+        if (targetUser.getEnterpriseId() == null) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
+        businessAccessService.assertCanManageEnterprise(operator, targetUser.getEnterpriseId());
     }
 
     private void assignRoles(Long userId, List<String> normalizedRoles) {
@@ -409,6 +441,39 @@ public class UserManagementService {
             assignments.add(assignment);
         }
         userRoleRepository.saveAll(assignments);
+    }
+
+    private void syncScopeRoles(UserAccount user, List<String> normalizedRoles) {
+        userScopeRoleRepository.deleteByUserId(user.getId());
+        if (normalizedRoles == null || normalizedRoles.isEmpty()) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        List<UserScopeRole> assignments = new ArrayList<>();
+        for (String roleCode : normalizedRoles) {
+            RoleTemplateCode templateCode = toTemplateCode(roleCode);
+            if (templateCode == null) {
+                continue;
+            }
+            UserScopeRole assignment = new UserScopeRole();
+            assignment.setUserId(user.getId());
+            assignment.setRoleCode(templateCode.name());
+            assignment.setStatus((byte) 1);
+            assignment.setCreatedAt(now);
+            assignment.setUpdatedAt(now);
+            if (templateCode.isPlatformRole()) {
+                assignment.setScopeType(ScopeType.PLATFORM.name());
+            } else {
+                if (user.getEnterpriseId() == null) {
+                    continue;
+                }
+                assignment.setScopeType(ScopeType.ENTERPRISE.name());
+                assignment.setEnterpriseId(user.getEnterpriseId());
+            }
+            assignments.add(assignment);
+        }
+        userScopeRoleRepository.saveAll(assignments);
     }
 
     private void ensureSuperAdminRetained(UserAccount user, List<String> beforeRoles, List<String> afterRoles) {
@@ -452,7 +517,13 @@ public class UserManagementService {
     }
 
     private boolean containsPlatformRole(List<String> roles) {
-        return roles.contains(RoleCode.SUPER_ADMIN.name()) || roles.contains(RoleCode.SYS_ADMIN.name());
+        return roles.contains(RoleCode.SUPER_ADMIN.name())
+                || roles.contains(RoleCode.SYS_ADMIN.name())
+                || roles.contains(RoleCode.RISK_ADMIN.name());
+    }
+
+    private Set<Long> resolveManageableEnterpriseIds(AuthenticatedUser operator) {
+        return businessAccessService.getAuthorizationProfile(operator).dataScope().enterpriseIds();
     }
 
     private Enterprise requireEnterpriseExists(Long enterpriseId) {
@@ -476,6 +547,7 @@ public class UserManagementService {
         snapshot.put("enterpriseName", resolveEnterpriseName(user.getEnterpriseId()));
         snapshot.put("enabled", isEnabled(user));
         snapshot.put("roles", roles);
+        snapshot.put("scopeRoles", buildScopeRoleSnapshot(user, roles));
         return snapshot;
     }
 
@@ -502,6 +574,38 @@ public class UserManagementService {
 
     private OffsetDateTime toOffsetDateTime(LocalDateTime time) {
         return time == null ? null : time.atOffset(ZoneOffset.UTC);
+    }
+
+    private List<String> buildScopeRoleSnapshot(UserAccount user, List<String> roles) {
+        List<String> snapshots = new ArrayList<>();
+        for (String role : roles) {
+            RoleTemplateCode templateCode = toTemplateCode(role);
+            if (templateCode == null) {
+                continue;
+            }
+            if (templateCode.isPlatformRole()) {
+                snapshots.add(templateCode.name() + "@PLATFORM");
+            } else if (user.getEnterpriseId() != null) {
+                snapshots.add(templateCode.name() + "@ENTERPRISE(" + user.getEnterpriseId() + ")");
+            }
+        }
+        return snapshots;
+    }
+
+    private RoleTemplateCode toTemplateCode(String roleCode) {
+        RoleCode normalized = RoleCode.from(roleCode).orElse(null);
+        if (normalized == null) {
+            return null;
+        }
+        return switch (normalized) {
+            case SUPER_ADMIN -> RoleTemplateCode.PLATFORM_SUPER_ADMIN;
+            case SYS_ADMIN -> RoleTemplateCode.PLATFORM_SYS_ADMIN;
+            case RISK_ADMIN -> RoleTemplateCode.PLATFORM_RISK_ADMIN;
+            case ENTERPRISE_ADMIN -> RoleTemplateCode.ORG_ADMIN;
+            case OPERATOR -> RoleTemplateCode.ORG_OPERATOR;
+            case ANALYST -> RoleTemplateCode.ORG_ANALYST;
+            case VIEWER -> RoleTemplateCode.ORG_VIEWER;
+        };
     }
 
     private int normalizePage(Integer page) {

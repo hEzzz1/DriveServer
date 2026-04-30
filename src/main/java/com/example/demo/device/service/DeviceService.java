@@ -2,6 +2,7 @@ package com.example.demo.device.service;
 
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.auth.service.BusinessAccessService;
+import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.device.dto.CreateDeviceRequest;
@@ -112,11 +113,8 @@ public class DeviceService {
     public DevicePageResponseData listDevices(AuthenticatedUser operator, Integer page, Integer size, Long enterpriseId, Long fleetId, Long vehicleId) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
-        Long readableEnterpriseId = enterpriseId == null ? null : businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
-        if (readableEnterpriseId == null && !businessAccessService.isSuperAdmin(operator)) {
-            readableEnterpriseId = businessAccessService.requireOperatorEnterpriseId(operator);
-        }
-        Specification<Device> specification = buildSpecification(readableEnterpriseId, fleetId, vehicleId);
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, enterpriseId, fleetId);
+        Specification<Device> specification = buildSpecification(dataScope, vehicleId);
         Page<Device> result = deviceRepository.findAll(specification, PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
         DeviceViewRefs refs = loadDeviceViewRefs(result.getContent());
         return new DevicePageResponseData(result.getTotalElements(), pageNo, pageSize,
@@ -195,6 +193,7 @@ public class DeviceService {
         if (!vehicle.getEnterpriseId().equals(device.getEnterpriseId())) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "vehicleId不属于当前enterprise");
         }
+        businessAccessService.assertCanAccessData(operator, vehicle.getEnterpriseId(), vehicle.getFleetId());
         validateVehicleAvailability(vehicle.getId(), device.getId());
 
         Map<String, Object> before = snapshot(device);
@@ -448,15 +447,10 @@ public class DeviceService {
                 });
     }
 
-    private Specification<Device> buildSpecification(Long enterpriseId, Long fleetId, Long vehicleId) {
+    private Specification<Device> buildSpecification(BusinessDataScope dataScope, Long vehicleId) {
         return (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
-            if (enterpriseId != null) {
-                predicates.add(cb.equal(root.get("enterpriseId"), enterpriseId));
-            }
-            if (fleetId != null) {
-                predicates.add(cb.equal(root.get("fleetId"), fleetId));
-            }
+            predicates.add(dataScope.toPredicate(root, cb, "enterpriseId", "fleetId"));
             if (vehicleId != null) {
                 predicates.add(cb.equal(root.get("vehicleId"), vehicleId));
             }
@@ -486,10 +480,10 @@ public class DeviceService {
 
     private void assertCanAccessDevice(AuthenticatedUser operator, Device device) {
         if (device.getEnterpriseId() != null) {
-            businessAccessService.assertCanManageEnterprise(operator, device.getEnterpriseId());
+            businessAccessService.assertCanAccessData(operator, device.getEnterpriseId(), device.getFleetId());
             return;
         }
-        if (!businessAccessService.isSuperAdmin(operator)) {
+        if (!businessAccessService.isPlatformScoped(operator)) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
     }
@@ -497,7 +491,7 @@ public class DeviceService {
     private BindingResolution resolveBindingForCreate(AuthenticatedUser operator, Long enterpriseId, Long fleetId, Long vehicleId) {
         if (vehicleId != null) {
             Vehicle vehicle = getVehicleEntity(vehicleId);
-            businessAccessService.assertCanManageEnterprise(operator, vehicle.getEnterpriseId());
+            businessAccessService.assertCanAccessData(operator, vehicle.getEnterpriseId(), vehicle.getFleetId());
             if (enterpriseId != null && !enterpriseId.equals(vehicle.getEnterpriseId())) {
                 throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId与vehicleId不匹配");
             }
@@ -509,7 +503,7 @@ public class DeviceService {
         }
         if (fleetId != null) {
             Fleet fleet = getFleetEntity(fleetId);
-            businessAccessService.assertCanManageEnterprise(operator, fleet.getEnterpriseId());
+            businessAccessService.assertCanAccessData(operator, fleet.getEnterpriseId(), fleet.getId());
             if (enterpriseId != null && !enterpriseId.equals(fleet.getEnterpriseId())) {
                 throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId与fleetId不匹配");
             }
@@ -520,7 +514,7 @@ public class DeviceService {
             businessAccessService.assertCanManageEnterprise(operator, enterprise.getId());
             return new BindingResolution(enterprise.getId(), null, null);
         }
-        if (!businessAccessService.isSuperAdmin(operator)) {
+        if (!businessAccessService.isPlatformScoped(operator)) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
         return new BindingResolution(null, null, null);

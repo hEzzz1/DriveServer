@@ -34,6 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class RuleManagementModuleIntegrationTest {
 
+    private static final long ENTERPRISE_ID = 1001L;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -73,8 +75,8 @@ class RuleManagementModuleIntegrationTest {
         Role admin = saveRole("SUPER_ADMIN", "超级管理员");
         Role viewer = saveRole("VIEWER", "只读观察员");
 
-        UserAccount adminUser = saveUser("admin", "123456", 1);
-        UserAccount viewerUser = saveUser("viewer", "123456", 1);
+        UserAccount adminUser = saveUser("admin", "123456", 1, null);
+        UserAccount viewerUser = saveUser("viewer", "123456", 1, ENTERPRISE_ID);
         bindUserRole(adminUser.getId(), admin.getId());
         bindUserRole(viewerUser.getId(), viewer.getId());
     }
@@ -330,12 +332,13 @@ class RuleManagementModuleIntegrationTest {
         return roleRepository.save(role);
     }
 
-    private UserAccount saveUser(String username, String password, int status) {
+    private UserAccount saveUser(String username, String password, int status, Long enterpriseId) {
         UserAccount user = new UserAccount();
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setNickname(username);
         user.setSubjectType(SubjectType.USER.name());
+        user.setEnterpriseId(enterpriseId);
         user.setStatus((byte) status);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());

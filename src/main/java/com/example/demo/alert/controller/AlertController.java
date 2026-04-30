@@ -7,12 +7,11 @@ import com.example.demo.alert.dto.AlertOperationResponseData;
 import com.example.demo.alert.dto.AlertPageResponseData;
 import com.example.demo.alert.dto.CreateAlertRequest;
 import com.example.demo.alert.service.AlertService;
-import com.example.demo.auth.security.AnyReadRole;
 import com.example.demo.auth.security.AuthenticatedUser;
-import com.example.demo.auth.security.OperatorOrSuperAdmin;
 import com.example.demo.common.api.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,14 +34,14 @@ public class AlertController {
     }
 
     @PostMapping
-    @OperatorOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'alert.handle')")
     public ApiResponse<AlertOperationResponseData> createAlert(@Valid @RequestBody CreateAlertRequest request,
                                                                Authentication authentication) {
         return ApiResponse.success(alertService.createAlert(request, currentUser(authentication)));
     }
 
     @GetMapping
-    @AnyReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'alert.read')")
     public ApiResponse<AlertPageResponseData> listAlerts(@RequestParam(required = false) Integer page,
                                                          @RequestParam(required = false) Integer size,
                                                          @RequestParam(required = false) Long fleetId,
@@ -51,19 +50,20 @@ public class AlertController {
                                                          @RequestParam(required = false) Integer riskLevel,
                                                          @RequestParam(required = false) Integer status,
                                                          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startTime,
-                                                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endTime) {
+                                                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endTime,
+                                                         Authentication authentication) {
         return ApiResponse.success(alertService.listAlerts(
-                page, size, fleetId, vehicleId, driverId, riskLevel, status, startTime, endTime));
+                page, size, currentUser(authentication), fleetId, vehicleId, driverId, riskLevel, status, startTime, endTime));
     }
 
     @GetMapping("/{id}")
-    @AnyReadRole
-    public ApiResponse<AlertDetailResponseData> detail(@PathVariable Long id) {
-        return ApiResponse.success(alertService.getAlertDetail(id));
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'alert.read')")
+    public ApiResponse<AlertDetailResponseData> detail(@PathVariable Long id, Authentication authentication) {
+        return ApiResponse.success(alertService.getAlertDetail(id, currentUser(authentication)));
     }
 
     @PostMapping("/{id}/confirm")
-    @OperatorOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'alert.handle')")
     public ApiResponse<AlertOperationResponseData> confirmAlert(@PathVariable Long id,
                                                                 @Valid @RequestBody AlertActionRequest request,
                                                                 Authentication authentication) {
@@ -71,7 +71,7 @@ public class AlertController {
     }
 
     @PostMapping("/{id}/false-positive")
-    @OperatorOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'alert.handle')")
     public ApiResponse<AlertOperationResponseData> falsePositive(@PathVariable Long id,
                                                                  @Valid @RequestBody AlertActionRequest request,
                                                                  Authentication authentication) {
@@ -79,7 +79,7 @@ public class AlertController {
     }
 
     @PostMapping("/{id}/close")
-    @OperatorOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'alert.handle')")
     public ApiResponse<AlertOperationResponseData> close(@PathVariable Long id,
                                                          @Valid @RequestBody AlertActionRequest request,
                                                          Authentication authentication) {
@@ -87,9 +87,9 @@ public class AlertController {
     }
 
     @GetMapping("/{id}/action-logs")
-    @AnyReadRole
-    public ApiResponse<AlertActionLogsResponseData> actionLogs(@PathVariable Long id) {
-        return ApiResponse.success(alertService.listActionLogs(id));
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'alert.read')")
+    public ApiResponse<AlertActionLogsResponseData> actionLogs(@PathVariable Long id, Authentication authentication) {
+        return ApiResponse.success(alertService.listActionLogs(id, currentUser(authentication)));
     }
 
     private AuthenticatedUser currentUser(Authentication authentication) {

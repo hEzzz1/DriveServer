@@ -2,6 +2,7 @@ package com.example.demo.device.service;
 
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.auth.service.BusinessAccessService;
+import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.device.entity.Device;
@@ -13,6 +14,7 @@ import com.example.demo.enterprise.dto.EnterpriseDeviceBindLogPageResponseData;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,11 +46,13 @@ public class EnterpriseDeviceBindLogService {
 
     @Transactional(readOnly = true)
     public EnterpriseDeviceBindLogPageResponseData list(AuthenticatedUser operator, Long enterpriseId, Integer page, Integer size) {
-        Long readableEnterpriseId = businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
-        Page<EdgeDeviceBindLog> result = edgeDeviceBindLogRepository.findByEnterpriseIdOrderByCreatedAtDescIdDesc(
-                readableEnterpriseId,
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, enterpriseId, null);
+        Specification<EdgeDeviceBindLog> specification = (root, query, cb) ->
+                dataScope.toPredicate(root, cb, "enterpriseId", null);
+        Page<EdgeDeviceBindLog> result = edgeDeviceBindLogRepository.findAll(
+                specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"))));
         Map<Long, Device> devicesById = loadDevices(result.getContent());
         return new EnterpriseDeviceBindLogPageResponseData(

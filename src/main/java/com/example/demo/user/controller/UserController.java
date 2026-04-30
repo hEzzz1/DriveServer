@@ -1,7 +1,6 @@
 package com.example.demo.user.controller;
 
 import com.example.demo.auth.security.AuthenticatedUser;
-import com.example.demo.auth.security.EnterpriseAdminOrSuperAdmin;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.user.dto.CreateUserRequest;
 import com.example.demo.user.dto.ResetUserPasswordRequest;
@@ -13,6 +12,7 @@ import com.example.demo.user.dto.UserPageResponseData;
 import com.example.demo.user.service.UserManagementService;
 import com.example.demo.system.dto.SystemAuditPageResponseData;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,14 +35,14 @@ public class UserController {
     }
 
     @PostMapping
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'user.manage')")
     public ApiResponse<UserDetailResponseData> createUser(@Valid @RequestBody CreateUserRequest request,
                                                           Authentication authentication) {
         return ApiResponse.success(userManagementService.createUser(currentUser(authentication), request));
     }
 
     @GetMapping
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'user.read')")
     public ApiResponse<UserPageResponseData> listUsers(@RequestParam(required = false) Integer page,
                                                        @RequestParam(required = false) Integer size,
                                                        @RequestParam(required = false) String keyword,
@@ -53,13 +53,13 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'user.read')")
     public ApiResponse<UserDetailResponseData> getUser(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(userManagementService.getUser(currentUser(authentication), id));
     }
 
     @PutMapping("/{id}")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'user.manage')")
     public ApiResponse<UserDetailResponseData> updateUser(@PathVariable Long id,
                                                           @Valid @RequestBody UpdateUserRequest request,
                                                           Authentication authentication) {
@@ -67,7 +67,7 @@ public class UserController {
     }
 
     @RequestMapping(path = "/{id}/roles", method = {RequestMethod.PUT, RequestMethod.POST})
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'user.manage')")
     public ApiResponse<UserDetailResponseData> updateRoles(@PathVariable Long id,
                                                            @Valid @RequestBody UpdateUserRolesRequest request,
                                                            Authentication authentication) {
@@ -75,7 +75,7 @@ public class UserController {
     }
 
     @PutMapping("/{id}/status")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'user.manage')")
     public ApiResponse<UserDetailResponseData> updateStatus(@PathVariable Long id,
                                                             @Valid @RequestBody UpdateUserStatusRequest request,
                                                             Authentication authentication) {
@@ -83,7 +83,7 @@ public class UserController {
     }
 
     @PostMapping("/{id}/reset-password")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'user.manage')")
     public ApiResponse<UserDetailResponseData> resetPassword(@PathVariable Long id,
                                                              @Valid @RequestBody ResetUserPasswordRequest request,
                                                              Authentication authentication) {
@@ -91,7 +91,7 @@ public class UserController {
     }
 
     @GetMapping("/{id}/audits")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'audit.read')")
     public ApiResponse<SystemAuditPageResponseData> listUserAudits(@PathVariable Long id,
                                                                    @RequestParam(required = false) Integer page,
                                                                    @RequestParam(required = false) Integer size,

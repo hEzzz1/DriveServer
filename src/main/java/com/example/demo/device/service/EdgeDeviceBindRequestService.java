@@ -2,6 +2,7 @@ package com.example.demo.device.service;
 
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.auth.service.BusinessAccessService;
+import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.device.dto.ApproveEdgeDeviceBindRequest;
@@ -158,8 +159,8 @@ public class EdgeDeviceBindRequestService {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
         expirePendingRequestsForList(status);
-        Long readableEnterpriseId = businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
-        Specification<EdgeDeviceBindRequest> specification = buildSpecification(readableEnterpriseId, normalizeOptional(status), normalizeOptional(deviceCode));
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, enterpriseId, null);
+        Specification<EdgeDeviceBindRequest> specification = buildSpecification(dataScope, normalizeOptional(status), normalizeOptional(deviceCode));
         Page<EdgeDeviceBindRequest> result = edgeDeviceBindRequestRepository.findAll(
                 specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.DESC, "createdAt")));
@@ -176,7 +177,7 @@ public class EdgeDeviceBindRequestService {
     @Transactional
     public EdgeDeviceBindRequestResponseData get(AuthenticatedUser operator, Long id) {
         EdgeDeviceBindRequest bindRequest = getEntity(id);
-        businessAccessService.resolveReadableEnterpriseId(operator, bindRequest.getRequestedEnterpriseId());
+        businessAccessService.assertCanAccessEnterprise(operator, bindRequest.getRequestedEnterpriseId());
         Device device = deviceService.requireDevice(bindRequest.getDeviceId());
         return toResponse(deviceService.refreshBindRequestIfExpired(device, bindRequest), device, true);
     }
@@ -287,12 +288,10 @@ public class EdgeDeviceBindRequestService {
                 .orElseThrow(() -> new BusinessException(ApiCode.NOT_FOUND, ApiCode.NOT_FOUND.getMessage()));
     }
 
-    private Specification<EdgeDeviceBindRequest> buildSpecification(Long enterpriseId, String status, String deviceCode) {
+    private Specification<EdgeDeviceBindRequest> buildSpecification(BusinessDataScope dataScope, String status, String deviceCode) {
         return (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
-            if (enterpriseId != null) {
-                predicates.add(cb.equal(root.get("requestedEnterpriseId"), enterpriseId));
-            }
+            predicates.add(dataScope.toPredicate(root, cb, "requestedEnterpriseId", null));
             if (StringUtils.hasText(status)) {
                 predicates.add(cb.equal(root.get("status"), status));
             }

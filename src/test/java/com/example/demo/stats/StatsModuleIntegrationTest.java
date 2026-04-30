@@ -9,6 +9,10 @@ import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
+import com.example.demo.enterprise.entity.Enterprise;
+import com.example.demo.enterprise.repository.EnterpriseRepository;
+import com.example.demo.fleet.entity.Fleet;
+import com.example.demo.fleet.repository.FleetRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,29 +59,43 @@ class StatsModuleIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private EnterpriseRepository enterpriseRepository;
+
+    @Autowired
+    private FleetRepository fleetRepository;
+
+    private Long enterpriseId;
+    private Long fleetId;
+
     @BeforeEach
     void setUp() {
         alertEventRepository.deleteAll();
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
+        fleetRepository.deleteAll();
+        enterpriseRepository.deleteAll();
 
-        Role viewer = saveRole("VIEWER", "观察员");
-        UserAccount viewerUser = saveUser("viewer", "123456", 1);
-        bindUserRole(viewerUser.getId(), viewer.getId());
+        enterpriseId = saveEnterprise("ENT-STATS", "统计企业", 1).getId();
+        fleetId = saveFleet(enterpriseId, "统计车队", 1).getId();
+
+        Role analyst = saveRole("ANALYST", "分析员");
+        UserAccount analystUser = saveUser("analyst", "123456", 1, enterpriseId);
+        bindUserRole(analystUser.getId(), analyst.getId());
     }
 
     @Test
     void trendEndpointShouldAggregateByHour() throws Exception {
-        saveAlert("ALT-TREND-001", 1001L, 2001L, 3001L, 11L, 3, "0.90", "0.80", "0.70", 0, "2026-04-20T10:15:00Z");
-        saveAlert("ALT-TREND-002", 1001L, 2002L, 3002L, 11L, 2, "0.60", "0.50", "0.40", 1, "2026-04-20T10:45:00Z");
-        saveAlert("ALT-TREND-003", 1001L, 2001L, 3001L, 12L, 3, "0.80", "0.70", "0.60", 3, "2026-04-20T11:05:00Z");
+        saveAlert("ALT-TREND-001", fleetId, 2001L, 3001L, 11L, 3, "0.90", "0.80", "0.70", 0, "2026-04-20T10:15:00Z");
+        saveAlert("ALT-TREND-002", fleetId, 2002L, 3002L, 11L, 2, "0.60", "0.50", "0.40", 1, "2026-04-20T10:45:00Z");
+        saveAlert("ALT-TREND-003", fleetId, 2001L, 3001L, 12L, 3, "0.80", "0.70", "0.60", 3, "2026-04-20T11:05:00Z");
 
-        String token = loginAndGetToken("viewer", "123456");
+        String token = loginAndGetToken("analyst", "123456");
 
         mockMvc.perform(get("/api/v1/stats/trend")
                         .header("Authorization", "Bearer " + token)
-                        .queryParam("fleetId", "1001")
+                        .queryParam("fleetId", String.valueOf(fleetId))
                         .queryParam("groupBy", "HOUR")
                         .queryParam("startTime", "2026-04-20T10:00:00Z")
                         .queryParam("endTime", "2026-04-20T11:59:59Z"))
@@ -97,16 +115,16 @@ class StatsModuleIntegrationTest {
 
     @Test
     void rankingEndpointShouldSortByAverageRiskScore() throws Exception {
-        saveAlert("ALT-RANK-001", 1001L, 2001L, 3001L, 11L, 3, "0.90", "0.80", "0.70", 0, "2026-04-21T08:00:00Z");
-        saveAlert("ALT-RANK-002", 1001L, 2002L, 3002L, 11L, 2, "0.50", "0.40", "0.30", 1, "2026-04-21T09:00:00Z");
-        saveAlert("ALT-RANK-003", 1001L, 2003L, 3003L, 12L, 3, "0.95", "0.88", "0.82", 0, "2026-04-21T10:00:00Z");
-        saveAlert("ALT-RANK-004", 1001L, 2001L, 3001L, 13L, 3, "0.80", "0.72", "0.61", 3, "2026-04-21T11:00:00Z");
+        saveAlert("ALT-RANK-001", fleetId, 2001L, 3001L, 11L, 3, "0.90", "0.80", "0.70", 0, "2026-04-21T08:00:00Z");
+        saveAlert("ALT-RANK-002", fleetId, 2002L, 3002L, 11L, 2, "0.50", "0.40", "0.30", 1, "2026-04-21T09:00:00Z");
+        saveAlert("ALT-RANK-003", fleetId, 2003L, 3003L, 12L, 3, "0.95", "0.88", "0.82", 0, "2026-04-21T10:00:00Z");
+        saveAlert("ALT-RANK-004", fleetId, 2001L, 3001L, 13L, 3, "0.80", "0.72", "0.61", 3, "2026-04-21T11:00:00Z");
 
-        String token = loginAndGetToken("viewer", "123456");
+        String token = loginAndGetToken("analyst", "123456");
 
         mockMvc.perform(get("/api/v1/stats/ranking")
                         .header("Authorization", "Bearer " + token)
-                        .queryParam("fleetId", "1001")
+                        .queryParam("fleetId", String.valueOf(fleetId))
                         .queryParam("dimension", "DRIVER_ID")
                         .queryParam("sortBy", "AVG_RISK_SCORE")
                         .queryParam("limit", "2")
@@ -130,7 +148,7 @@ class StatsModuleIntegrationTest {
 
     @Test
     void rankingEndpointShouldRejectInvalidEnumParam() throws Exception {
-        String token = loginAndGetToken("viewer", "123456");
+        String token = loginAndGetToken("analyst", "123456");
 
         mockMvc.perform(get("/api/v1/stats/ranking")
                         .header("Authorization", "Bearer " + token)
@@ -142,7 +160,7 @@ class StatsModuleIntegrationTest {
 
     @Test
     void rankingEndpointShouldReturnEmptyItemsWhenNoData() throws Exception {
-        String token = loginAndGetToken("viewer", "123456");
+        String token = loginAndGetToken("analyst", "123456");
 
         mockMvc.perform(get("/api/v1/stats/ranking")
                         .header("Authorization", "Bearer " + token)
@@ -169,6 +187,7 @@ class StatsModuleIntegrationTest {
         AlertEvent alert = new AlertEvent();
         LocalDateTime now = LocalDateTime.of(2026, 4, 25, 10, 0, 0);
         alert.setAlertNo(alertNo);
+        alert.setEnterpriseId(enterpriseId);
         alert.setFleetId(fleetId);
         alert.setVehicleId(vehicleId);
         alert.setDriverId(driverId);
@@ -196,12 +215,33 @@ class StatsModuleIntegrationTest {
         return roleRepository.save(role);
     }
 
-    private UserAccount saveUser(String username, String password, int status) {
+    private Enterprise saveEnterprise(String code, String name, int status) {
+        Enterprise enterprise = new Enterprise();
+        enterprise.setCode(code);
+        enterprise.setName(name);
+        enterprise.setStatus((byte) status);
+        enterprise.setCreatedAt(LocalDateTime.now());
+        enterprise.setUpdatedAt(LocalDateTime.now());
+        return enterpriseRepository.save(enterprise);
+    }
+
+    private Fleet saveFleet(Long targetEnterpriseId, String name, int status) {
+        Fleet fleet = new Fleet();
+        fleet.setEnterpriseId(targetEnterpriseId);
+        fleet.setName(name);
+        fleet.setStatus((byte) status);
+        fleet.setCreatedAt(LocalDateTime.now());
+        fleet.setUpdatedAt(LocalDateTime.now());
+        return fleetRepository.save(fleet);
+    }
+
+    private UserAccount saveUser(String username, String password, int status, Long userEnterpriseId) {
         UserAccount user = new UserAccount();
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setNickname(username);
         user.setSubjectType(SubjectType.USER.name());
+        user.setEnterpriseId(userEnterpriseId);
         user.setStatus((byte) status);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());

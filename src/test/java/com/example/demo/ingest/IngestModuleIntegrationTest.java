@@ -9,6 +9,9 @@ import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
 import com.example.demo.alert.repository.AlertEventRepository;
+import com.example.demo.device.entity.Device;
+import com.example.demo.device.model.EdgeDeviceStatus;
+import com.example.demo.device.repository.DeviceRepository;
 import com.example.demo.rule.entity.RuleConfig;
 import com.example.demo.rule.repository.RuleConfigRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -38,7 +41,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class IngestModuleIntegrationTest {
 
+    private static final String DEVICE_CODE = "edge-device-01";
     private static final String DEVICE_TOKEN = "test-device-token";
+    private static final long ENTERPRISE_ID = 1001L;
+    private static final long FLEET_ID = 1002L;
+    private static final long VEHICLE_ID = 1L;
+    private static final long DRIVER_ID = 2001L;
 
     @Autowired
     private MockMvc mockMvc;
@@ -64,10 +72,14 @@ class IngestModuleIntegrationTest {
     @Autowired
     private RuleConfigRepository ruleConfigRepository;
 
+    @Autowired
+    private DeviceRepository deviceRepository;
+
     @BeforeEach
     void setUp() {
         alertEventRepository.deleteAll();
         ruleConfigRepository.deleteAll();
+        deviceRepository.deleteAll();
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
@@ -75,6 +87,7 @@ class IngestModuleIntegrationTest {
         Role admin = saveRole("SUPER_ADMIN", "超级管理员");
         UserAccount adminUser = saveUser("admin", "123456", 1);
         saveSystemUser("system-auto-alert");
+        saveDevice();
         bindUserRole(adminUser.getId(), admin.getId());
         saveRule("RISK_HIGH", "高风险规则", 3, "0.8000", 3, 60, true, "ENABLED");
         saveRule("RISK_MID", "中风险规则", 2, "0.6500", 5, 60, true, "ENABLED");
@@ -86,6 +99,7 @@ class IngestModuleIntegrationTest {
         String eventId = "evt_" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-Device-Code", DEVICE_CODE)
                         .header("X-Device-Token", DEVICE_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validPayload(eventId)))
@@ -99,6 +113,7 @@ class IngestModuleIntegrationTest {
         String eventId = "evt_warning_" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-Device-Code", DEVICE_CODE)
                         .header("X-Device-Token", DEVICE_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payloadWithScores(eventId, "2026-04-07T10:01:15Z", 0.82, 0.64)))
@@ -111,7 +126,7 @@ class IngestModuleIntegrationTest {
                         .param("size", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1))
-                .andExpect(jsonPath("$.data.items[0].vehicleId").value(1))
+                .andExpect(jsonPath("$.data.items[0].vehicleId").value(VEHICLE_ID))
                 .andExpect(jsonPath("$.data.items[0].riskLevel").value(3))
                 .andExpect(jsonPath("$.data.items[0].fatigueScore").value(0.82));
     }
@@ -121,14 +136,15 @@ class IngestModuleIntegrationTest {
         String eventId = "evt_alias_" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-Device-Code", DEVICE_CODE)
                         .header("X-Device-Token", DEVICE_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "eventId": "%s",
-                                  "fleetId": "fleet_01",
-                                  "vehicleId": "veh_001",
-                                  "driverId": "drv_001",
+                                  "fleetId": "%d",
+                                  "vehicleId": "%d",
+                                  "driverId": "%d",
                                   "eventTime": "2026-04-07T10:01:15Z",
                                   "fatigueScore": 0.72,
                                   "distractionScore": 0.68,
@@ -139,7 +155,7 @@ class IngestModuleIntegrationTest {
                                   "windowEndMs": 1744010475000,
                                   "createdAtMs": 1744010475200
                                 }
-                                """.formatted(eventId)))
+                                """.formatted(eventId, FLEET_ID, VEHICLE_ID, DRIVER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.accepted").value(true));
@@ -168,19 +184,20 @@ class IngestModuleIntegrationTest {
         String eventId = "evt_" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-Device-Code", DEVICE_CODE)
                         .header("X-Device-Token", DEVICE_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "eventId": "%s",
-                                  "fleetId": "fleet_01",
-                                  "vehicleId": "veh_001",
-                                  "driverId": "drv_001",
+                                  "fleetId": "%d",
+                                  "vehicleId": "%d",
+                                  "driverId": "%d",
                                   "eventTime": "2026-04-07T10:01:15Z",
                                   "fatigueScore": 1.01,
                                   "distractionScore": 0.64
                                 }
-                                """.formatted(eventId)))
+                                """.formatted(eventId, FLEET_ID, VEHICLE_ID, DRIVER_ID)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(40001));
     }
@@ -190,6 +207,7 @@ class IngestModuleIntegrationTest {
         String eventId = "evt_dup_" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-Device-Code", DEVICE_CODE)
                         .header("X-Device-Token", DEVICE_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validPayload(eventId)))
@@ -197,6 +215,7 @@ class IngestModuleIntegrationTest {
                 .andExpect(jsonPath("$.code").value(0));
 
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-Device-Code", DEVICE_CODE)
                         .header("X-Device-Token", DEVICE_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validPayload(eventId)))
@@ -209,12 +228,14 @@ class IngestModuleIntegrationTest {
         String eventId = "evt_bad_token_" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-Device-Code", DEVICE_CODE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validPayload(eventId)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(40101));
 
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-Device-Code", DEVICE_CODE)
                         .header("X-Device-Token", "invalid-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validPayload(eventId + "_2")))
@@ -228,6 +249,7 @@ class IngestModuleIntegrationTest {
         String eventId = "evt_no_rules_" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/events")
+                        .header("X-Device-Code", DEVICE_CODE)
                         .header("X-Device-Token", DEVICE_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validPayload(eventId)))
@@ -246,9 +268,9 @@ class IngestModuleIntegrationTest {
         return """
                 {
                   "eventId": "%s",
-                  "fleetId": "fleet_01",
-                  "vehicleId": "veh_001",
-                  "driverId": "drv_001",
+                  "fleetId": "%d",
+                  "vehicleId": "%d",
+                  "driverId": "%d",
                   "eventTime": "%s",
                   "fatigueScore": %.2f,
                   "distractionScore": %.2f,
@@ -258,7 +280,7 @@ class IngestModuleIntegrationTest {
                   "headPose": "DOWN",
                   "algorithmVer": "v1.0.3"
                 }
-                """.formatted(eventId, eventTime, fatigueScore, distractionScore);
+                """.formatted(eventId, FLEET_ID, VEHICLE_ID, DRIVER_ID, eventTime, fatigueScore, distractionScore);
     }
 
     private String bearerToken() {
@@ -293,6 +315,20 @@ class IngestModuleIntegrationTest {
         role.setCreatedAt(LocalDateTime.now());
         role.setUpdatedAt(LocalDateTime.now());
         return roleRepository.save(role);
+    }
+
+    private Device saveDevice() {
+        Device device = new Device();
+        device.setEnterpriseId(ENTERPRISE_ID);
+        device.setFleetId(FLEET_ID);
+        device.setVehicleId(VEHICLE_ID);
+        device.setDeviceCode(DEVICE_CODE);
+        device.setDeviceName("边缘设备-01");
+        device.setDeviceToken(DEVICE_TOKEN);
+        device.setStatus(EdgeDeviceStatus.BOUND.name());
+        device.setCreatedAt(LocalDateTime.now());
+        device.setUpdatedAt(LocalDateTime.now());
+        return deviceRepository.save(device);
     }
 
     private UserAccount saveUser(String username, String password, int status) {

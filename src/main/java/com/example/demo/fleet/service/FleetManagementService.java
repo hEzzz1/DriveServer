@@ -1,6 +1,7 @@
 package com.example.demo.fleet.service;
 
 import com.example.demo.auth.service.BusinessAccessService;
+import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
@@ -58,8 +59,8 @@ public class FleetManagementService {
                                             String keyword) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
-        Long readableEnterpriseId = businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
-        Specification<Fleet> specification = buildSpecification(readableEnterpriseId, keyword);
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, enterpriseId, null);
+        Specification<Fleet> specification = buildSpecification(dataScope, keyword);
         Page<Fleet> result = fleetRepository.findAll(
                 specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
@@ -73,7 +74,7 @@ public class FleetManagementService {
     @Transactional(readOnly = true)
     public FleetDetailResponseData getFleet(AuthenticatedUser operator, Long fleetId) {
         Fleet fleet = getFleetEntity(fleetId);
-        businessAccessService.resolveReadableEnterpriseId(operator, fleet.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, fleet.getEnterpriseId(), fleet.getId());
         return toDetail(fleet);
     }
 
@@ -104,7 +105,7 @@ public class FleetManagementService {
     @Transactional
     public FleetDetailResponseData updateFleet(AuthenticatedUser operator, Long fleetId, UpdateFleetRequest request) {
         Fleet fleet = getFleetEntity(fleetId);
-        businessAccessService.assertCanManageEnterprise(operator, fleet.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, fleet.getEnterpriseId(), fleet.getId());
         Map<String, Object> before = snapshot(fleet);
         String name = normalizeRequired(request.name(), "name不能为空");
         if (fleetRepository.existsByEnterpriseIdAndNameAndIdNot(fleet.getEnterpriseId(), name, fleetId)) {
@@ -122,7 +123,7 @@ public class FleetManagementService {
     @Transactional
     public FleetDetailResponseData updateStatus(AuthenticatedUser operator, Long fleetId, Byte status) {
         Fleet fleet = getFleetEntity(fleetId);
-        businessAccessService.assertCanManageEnterprise(operator, fleet.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, fleet.getEnterpriseId(), fleet.getId());
         Map<String, Object> before = snapshot(fleet);
         fleet.setStatus(normalizeStatus(status));
         Fleet saved = fleetRepository.save(fleet);
@@ -132,12 +133,10 @@ public class FleetManagementService {
         return toDetail(saved);
     }
 
-    private Specification<Fleet> buildSpecification(Long enterpriseId, String keyword) {
+    private Specification<Fleet> buildSpecification(BusinessDataScope dataScope, String keyword) {
         return (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
-            if (enterpriseId != null) {
-                predicates.add(cb.equal(root.get("enterpriseId"), enterpriseId));
-            }
+            predicates.add(dataScope.toPredicate(root, cb, "enterpriseId", "id"));
             if (StringUtils.hasText(keyword)) {
                 predicates.add(cb.like(root.get("name"), "%" + keyword.trim() + "%"));
             }

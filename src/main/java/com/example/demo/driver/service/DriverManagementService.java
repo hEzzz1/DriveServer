@@ -1,6 +1,7 @@
 package com.example.demo.driver.service;
 
 import com.example.demo.auth.service.BusinessAccessService;
+import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
@@ -79,9 +80,8 @@ public class DriverManagementService {
                                               Byte status) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
-        Long readableEnterpriseId = businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
-        validateFleetScope(fleetId, readableEnterpriseId);
-        Specification<Driver> specification = buildSpecification(readableEnterpriseId, fleetId, keyword, normalizeStatus(status, true));
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, enterpriseId, fleetId);
+        Specification<Driver> specification = buildSpecification(dataScope, keyword, normalizeStatus(status, true));
         Page<Driver> result = driverRepository.findAll(
                 specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
@@ -96,16 +96,16 @@ public class DriverManagementService {
     @Transactional(readOnly = true)
     public DriverDetailResponseData getDriver(AuthenticatedUser operator, Long driverId) {
         Driver driver = getDriverEntity(driverId);
-        businessAccessService.resolveReadableEnterpriseId(operator, driver.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, driver.getEnterpriseId(), driver.getFleetId());
         return toDetail(driver, loadActiveSessions(List.of(driver)));
     }
 
     @Transactional
     public DriverDetailResponseData createDriver(AuthenticatedUser operator, CreateDriverRequest request) {
         Long enterpriseId = request.enterpriseId();
-        businessAccessService.assertCanManageEnterprise(operator, enterpriseId);
         validateEnterpriseExists(enterpriseId);
         validateFleetBelongsToEnterprise(request.fleetId(), enterpriseId);
+        businessAccessService.assertCanAccessData(operator, enterpriseId, request.fleetId());
 
         Driver driver = new Driver();
         driver.setEnterpriseId(enterpriseId);
@@ -128,7 +128,7 @@ public class DriverManagementService {
     @Transactional
     public DriverDetailResponseData updateDriver(AuthenticatedUser operator, Long driverId, UpdateDriverRequest request) {
         Driver driver = getDriverEntity(driverId);
-        businessAccessService.assertCanManageEnterprise(operator, driver.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, driver.getEnterpriseId(), driver.getFleetId());
         Map<String, Object> before = snapshot(driver);
         String driverCode = generateDriverCode(driver.getEnterpriseId(), request.driverCode());
         if (!driverCode.equals(driver.getDriverCode()) && driverRepository.existsByEnterpriseIdAndDriverCode(driver.getEnterpriseId(), driverCode)) {
@@ -149,7 +149,7 @@ public class DriverManagementService {
     @Transactional
     public DriverDetailResponseData updateStatus(AuthenticatedUser operator, Long driverId, Byte status) {
         Driver driver = getDriverEntity(driverId);
-        businessAccessService.assertCanManageEnterprise(operator, driver.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, driver.getEnterpriseId(), driver.getFleetId());
         Map<String, Object> before = snapshot(driver);
         driver.setStatus(normalizeStatus(status, false));
         Driver saved = driverRepository.save(driver);
@@ -162,8 +162,9 @@ public class DriverManagementService {
     @Transactional
     public DriverDetailResponseData reassignFleet(AuthenticatedUser operator, Long driverId, ReassignDriverFleetRequest request) {
         Driver driver = getDriverEntity(driverId);
-        businessAccessService.assertCanManageEnterprise(operator, driver.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, driver.getEnterpriseId(), driver.getFleetId());
         validateFleetBelongsToEnterprise(request.fleetId(), driver.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, driver.getEnterpriseId(), request.fleetId());
         Map<String, Object> before = snapshot(driver);
         driver.setFleetId(request.fleetId());
         Driver saved = driverRepository.save(driver);
@@ -176,7 +177,7 @@ public class DriverManagementService {
     @Transactional
     public DriverDetailResponseData resetPin(AuthenticatedUser operator, Long driverId, String pin) {
         Driver driver = getDriverEntity(driverId);
-        businessAccessService.assertCanManageEnterprise(operator, driver.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, driver.getEnterpriseId(), driver.getFleetId());
         Map<String, Object> before = snapshot(driver);
         driver.setPinHash(passwordEncoder.encode(normalizeRequired(pin, "pin不能为空")));
         Driver saved = driverRepository.save(driver);
@@ -185,15 +186,10 @@ public class DriverManagementService {
         return toDetail(saved, loadActiveSessions(List.of(saved)));
     }
 
-    private Specification<Driver> buildSpecification(Long enterpriseId, Long fleetId, String keyword, Byte status) {
+    private Specification<Driver> buildSpecification(BusinessDataScope dataScope, String keyword, Byte status) {
         return (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
-            if (enterpriseId != null) {
-                predicates.add(cb.equal(root.get("enterpriseId"), enterpriseId));
-            }
-            if (fleetId != null) {
-                predicates.add(cb.equal(root.get("fleetId"), fleetId));
-            }
+            predicates.add(dataScope.toPredicate(root, cb, "enterpriseId", "fleetId"));
             if (StringUtils.hasText(keyword)) {
                 String pattern = "%" + keyword.trim() + "%";
                 predicates.add(cb.or(
@@ -217,17 +213,6 @@ public class DriverManagementService {
     private void validateEnterpriseExists(Long enterpriseId) {
         if (!enterpriseRepository.existsById(enterpriseId)) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId不存在");
-        }
-    }
-
-    private void validateFleetScope(Long fleetId, Long enterpriseId) {
-        if (fleetId == null) {
-            return;
-        }
-        Fleet fleet = fleetRepository.findById(fleetId)
-                .orElseThrow(() -> new BusinessException(ApiCode.INVALID_PARAM, "fleetId不存在"));
-        if (enterpriseId != null && !enterpriseId.equals(fleet.getEnterpriseId())) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
     }
 

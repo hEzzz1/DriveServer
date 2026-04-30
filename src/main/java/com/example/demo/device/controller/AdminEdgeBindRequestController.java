@@ -1,7 +1,6 @@
 package com.example.demo.device.controller;
 
 import com.example.demo.auth.security.AuthenticatedUser;
-import com.example.demo.auth.security.EnterpriseAdminOrSuperAdmin;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.device.dto.ApproveEdgeDeviceBindRequest;
 import com.example.demo.device.dto.EdgeDeviceBindRequestPageResponseData;
@@ -9,6 +8,7 @@ import com.example.demo.device.dto.EdgeDeviceBindRequestResponseData;
 import com.example.demo.device.dto.RejectEdgeDeviceBindRequest;
 import com.example.demo.device.service.EdgeDeviceBindRequestService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,7 +29,7 @@ public class AdminEdgeBindRequestController {
     }
 
     @GetMapping
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.manage')")
     public ApiResponse<EdgeDeviceBindRequestPageResponseData> list(@RequestParam(required = false) Integer page,
                                                                    @RequestParam(required = false) Integer size,
                                                                    @RequestParam(required = false) Long enterpriseId,
@@ -40,13 +40,13 @@ public class AdminEdgeBindRequestController {
     }
 
     @GetMapping("/{id}")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.manage')")
     public ApiResponse<EdgeDeviceBindRequestResponseData> get(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(edgeDeviceBindRequestService.get(currentUser(authentication), id));
     }
 
     @PostMapping("/{id}/approve")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.manage')")
     public ApiResponse<EdgeDeviceBindRequestResponseData> approve(@PathVariable Long id,
                                                                   @Valid @RequestBody(required = false) ApproveEdgeDeviceBindRequest request,
                                                                   Authentication authentication) {
@@ -54,7 +54,7 @@ public class AdminEdgeBindRequestController {
     }
 
     @PostMapping("/{id}/reject")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'device.manage')")
     public ApiResponse<EdgeDeviceBindRequestResponseData> reject(@PathVariable Long id,
                                                                  @Valid @RequestBody RejectEdgeDeviceBindRequest request,
                                                                  Authentication authentication) {

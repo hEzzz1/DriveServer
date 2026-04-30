@@ -32,6 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class AlertModuleIntegrationTest {
 
+    private static final long ENTERPRISE_ID = 1001L;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -68,9 +70,9 @@ class AlertModuleIntegrationTest {
         Role operator = saveRole("OPERATOR", "运维操作员");
         Role viewer = saveRole("VIEWER", "观察员");
 
-        UserAccount adminUser = saveUser("admin", "123456", 1);
-        UserAccount operatorUser = saveUser("operator", "123456", 1);
-        UserAccount viewerUser = saveUser("viewer", "123456", 1);
+        UserAccount adminUser = saveUser("admin", "123456", 1, null);
+        UserAccount operatorUser = saveUser("operator", "123456", 1, ENTERPRISE_ID);
+        UserAccount viewerUser = saveUser("viewer", "123456", 1, ENTERPRISE_ID);
 
         bindUserRole(adminUser.getId(), admin.getId());
         bindUserRole(operatorUser.getId(), operator.getId());
@@ -296,6 +298,7 @@ class AlertModuleIntegrationTest {
     private String createAlertPayload() {
         return """
                 {
+                  "enterpriseId": %d,
                   "fleetId": 1001,
                   "vehicleId": 2001,
                   "driverId": 3001,
@@ -307,7 +310,7 @@ class AlertModuleIntegrationTest {
                   "triggerTime": "2026-04-07T10:01:16Z",
                   "remark": "系统自动创建"
                 }
-                """;
+                """.formatted(ENTERPRISE_ID);
     }
 
     private Role saveRole(String roleCode, String roleName) {
@@ -319,12 +322,13 @@ class AlertModuleIntegrationTest {
         return roleRepository.save(role);
     }
 
-    private UserAccount saveUser(String username, String password, int status) {
+    private UserAccount saveUser(String username, String password, int status, Long enterpriseId) {
         UserAccount user = new UserAccount();
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setNickname(username);
         user.setSubjectType(SubjectType.USER.name());
+        user.setEnterpriseId(enterpriseId);
         user.setStatus((byte) status);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());

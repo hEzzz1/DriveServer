@@ -1,8 +1,6 @@
 package com.example.demo.vehicle.controller;
 
 import com.example.demo.auth.security.AuthenticatedUser;
-import com.example.demo.auth.security.EnterpriseAdminOrSuperAdmin;
-import com.example.demo.auth.security.EnterpriseReadRole;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.vehicle.dto.CreateVehicleRequest;
 import com.example.demo.vehicle.dto.UpdateVehicleRequest;
@@ -11,6 +9,7 @@ import com.example.demo.vehicle.dto.VehicleDetailResponseData;
 import com.example.demo.vehicle.dto.VehiclePageResponseData;
 import com.example.demo.vehicle.service.VehicleManagementService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,7 +31,7 @@ public class VehicleController {
     }
 
     @GetMapping
-    @EnterpriseReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'vehicle.read')")
     public ApiResponse<VehiclePageResponseData> listVehicles(@RequestParam(required = false) Integer page,
                                                              @RequestParam(required = false) Integer size,
                                                              @RequestParam(required = false) Long enterpriseId,
@@ -44,19 +43,19 @@ public class VehicleController {
     }
 
     @GetMapping("/{id}")
-    @EnterpriseReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'vehicle.read')")
     public ApiResponse<VehicleDetailResponseData> getVehicle(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(vehicleManagementService.getVehicle(currentUser(authentication), id));
     }
 
     @PostMapping
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'vehicle.manage')")
     public ApiResponse<VehicleDetailResponseData> createVehicle(@Valid @RequestBody CreateVehicleRequest request, Authentication authentication) {
         return ApiResponse.success(vehicleManagementService.createVehicle(currentUser(authentication), request));
     }
 
     @PutMapping("/{id}")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'vehicle.manage')")
     public ApiResponse<VehicleDetailResponseData> updateVehicle(@PathVariable Long id,
                                                                 @Valid @RequestBody UpdateVehicleRequest request,
                                                                 Authentication authentication) {
@@ -64,7 +63,7 @@ public class VehicleController {
     }
 
     @PutMapping("/{id}/status")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'vehicle.manage')")
     public ApiResponse<VehicleDetailResponseData> updateVehicleStatus(@PathVariable Long id,
                                                                       @Valid @RequestBody UpdateVehicleStatusRequest request,
                                                                       Authentication authentication) {

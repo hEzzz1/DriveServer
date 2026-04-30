@@ -1,9 +1,11 @@
 package com.example.demo.realtime.controller;
 
-import com.example.demo.auth.security.AnyReadRole;
+import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.stats.dto.StatsOverviewResponseData;
 import com.example.demo.stats.service.StatsService;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -20,8 +22,13 @@ public class RealtimeOverviewController {
     }
 
     @GetMapping("/overview")
-    @AnyReadRole
-    public ApiResponse<StatsOverviewResponseData> overview(@RequestParam(required = false) Long fleetId) {
-        return ApiResponse.success(statsService.getRealtimeOverview(fleetId));
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'overview.read')")
+    public ApiResponse<StatsOverviewResponseData> overview(@RequestParam(required = false) Long fleetId,
+                                                           Authentication authentication) {
+        return ApiResponse.success(statsService.getRealtimeOverview(currentUser(authentication), fleetId));
+    }
+
+    private AuthenticatedUser currentUser(Authentication authentication) {
+        return (AuthenticatedUser) authentication.getPrincipal();
     }
 }

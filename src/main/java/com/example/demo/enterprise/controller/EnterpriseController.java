@@ -1,9 +1,6 @@
 package com.example.demo.enterprise.controller;
 
 import com.example.demo.auth.security.AuthenticatedUser;
-import com.example.demo.auth.security.EnterpriseAdminOrSuperAdmin;
-import com.example.demo.auth.security.EnterpriseReadRole;
-import com.example.demo.auth.security.SuperAdminOnly;
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.enterprise.dto.EnterpriseActivationCodeResponseData;
 import com.example.demo.enterprise.dto.CreateEnterpriseRequest;
@@ -16,6 +13,7 @@ import com.example.demo.device.service.EnterpriseDeviceBindLogService;
 import com.example.demo.enterprise.service.EnterpriseActivationCodeService;
 import com.example.demo.enterprise.service.EnterpriseManagementService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,7 +41,7 @@ public class EnterpriseController {
     }
 
     @GetMapping
-    @EnterpriseReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'enterprise.read')")
     public ApiResponse<EnterprisePageResponseData> listEnterprises(@RequestParam(required = false) Integer page,
                                                                    @RequestParam(required = false) Integer size,
                                                                    @RequestParam(required = false) String keyword,
@@ -53,31 +51,31 @@ public class EnterpriseController {
     }
 
     @GetMapping("/{id}")
-    @EnterpriseReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'enterprise.read')")
     public ApiResponse<EnterpriseDetailResponseData> getEnterprise(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(enterpriseManagementService.getEnterprise(currentUser(authentication), id));
     }
 
     @GetMapping("/{id}/activation-code")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'activation_code.read')")
     public ApiResponse<EnterpriseActivationCodeResponseData> getActivationCode(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(enterpriseActivationCodeService.getActivationCode(currentUser(authentication), id));
     }
 
     @PostMapping("/{id}/activation-code/rotate")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'activation_code.manage')")
     public ApiResponse<EnterpriseActivationCodeResponseData> rotateActivationCode(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(enterpriseActivationCodeService.rotateActivationCode(currentUser(authentication), id));
     }
 
     @PostMapping("/{id}/activation-code/disable")
-    @EnterpriseAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'activation_code.manage')")
     public ApiResponse<EnterpriseActivationCodeResponseData> disableActivationCode(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(enterpriseActivationCodeService.disableActivationCode(currentUser(authentication), id));
     }
 
     @GetMapping("/{id}/device-bind-logs")
-    @EnterpriseReadRole
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'activation_code.read')")
     public ApiResponse<EnterpriseDeviceBindLogPageResponseData> getDeviceBindLogs(@PathVariable Long id,
                                                                                   @RequestParam(required = false) Integer page,
                                                                                   @RequestParam(required = false) Integer size,
@@ -86,14 +84,14 @@ public class EnterpriseController {
     }
 
     @PostMapping
-    @SuperAdminOnly
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'enterprise.manage')")
     public ApiResponse<EnterpriseDetailResponseData> createEnterprise(@Valid @RequestBody CreateEnterpriseRequest request,
                                                                       Authentication authentication) {
         return ApiResponse.success(enterpriseManagementService.createEnterprise(currentUser(authentication), request));
     }
 
     @PutMapping("/{id}")
-    @SuperAdminOnly
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'enterprise.manage')")
     public ApiResponse<EnterpriseDetailResponseData> updateEnterprise(@PathVariable Long id,
                                                                       @Valid @RequestBody UpdateEnterpriseRequest request,
                                                                       Authentication authentication) {
@@ -101,7 +99,7 @@ public class EnterpriseController {
     }
 
     @PutMapping("/{id}/status")
-    @SuperAdminOnly
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'enterprise.manage')")
     public ApiResponse<EnterpriseDetailResponseData> updateEnterpriseStatus(@PathVariable Long id,
                                                                             @Valid @RequestBody UpdateEnterpriseStatusRequest request,
                                                                             Authentication authentication) {

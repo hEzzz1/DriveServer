@@ -2,6 +2,7 @@ package com.example.demo.vehicle.service;
 
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.auth.service.BusinessAccessService;
+import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.device.entity.Device;
@@ -73,9 +74,8 @@ public class VehicleManagementService {
                                                 Byte status) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
-        Long readableEnterpriseId = businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
-        validateFleetScope(fleetId, readableEnterpriseId);
-        Specification<Vehicle> specification = buildSpecification(readableEnterpriseId, fleetId, keyword, normalizeStatus(status, true));
+        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, enterpriseId, fleetId);
+        Specification<Vehicle> specification = buildSpecification(dataScope, keyword, normalizeStatus(status, true));
         Page<Vehicle> result = vehicleRepository.findAll(specification, PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
         Map<Long, Device> boundDevices = loadBoundDeviceMap(result.getContent());
         return new VehiclePageResponseData(result.getTotalElements(), pageNo, pageSize,
@@ -85,16 +85,16 @@ public class VehicleManagementService {
     @Transactional(readOnly = true)
     public VehicleDetailResponseData getVehicle(AuthenticatedUser operator, Long vehicleId) {
         Vehicle vehicle = getVehicleEntity(vehicleId);
-        businessAccessService.resolveReadableEnterpriseId(operator, vehicle.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, vehicle.getEnterpriseId(), vehicle.getFleetId());
         return toDetail(vehicle, loadBoundDeviceMap(List.of(vehicle)));
     }
 
     @Transactional
     public VehicleDetailResponseData createVehicle(AuthenticatedUser operator, CreateVehicleRequest request) {
         Long enterpriseId = request.enterpriseId();
-        businessAccessService.assertCanManageEnterprise(operator, enterpriseId);
         validateEnterpriseExists(enterpriseId);
         validateFleetBelongsToEnterprise(request.fleetId(), enterpriseId);
+        businessAccessService.assertCanAccessData(operator, enterpriseId, request.fleetId());
         String plateNumber = normalizeRequired(request.plateNumber(), "plateNumber不能为空");
         if (vehicleRepository.existsByEnterpriseIdAndPlateNumber(enterpriseId, plateNumber)) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "车牌号已存在");
@@ -118,8 +118,9 @@ public class VehicleManagementService {
     @Transactional
     public VehicleDetailResponseData updateVehicle(AuthenticatedUser operator, Long vehicleId, UpdateVehicleRequest request) {
         Vehicle vehicle = getVehicleEntity(vehicleId);
-        businessAccessService.assertCanManageEnterprise(operator, vehicle.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, vehicle.getEnterpriseId(), vehicle.getFleetId());
         validateFleetBelongsToEnterprise(request.fleetId(), vehicle.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, vehicle.getEnterpriseId(), request.fleetId());
         String plateNumber = normalizeRequired(request.plateNumber(), "plateNumber不能为空");
         if (vehicleRepository.existsByEnterpriseIdAndPlateNumberAndIdNot(vehicle.getEnterpriseId(), plateNumber, vehicleId)) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "车牌号已存在");
@@ -138,7 +139,7 @@ public class VehicleManagementService {
     @Transactional
     public VehicleDetailResponseData updateStatus(AuthenticatedUser operator, Long vehicleId, Byte status) {
         Vehicle vehicle = getVehicleEntity(vehicleId);
-        businessAccessService.assertCanManageEnterprise(operator, vehicle.getEnterpriseId());
+        businessAccessService.assertCanAccessData(operator, vehicle.getEnterpriseId(), vehicle.getFleetId());
         Map<String, Object> before = snapshot(vehicle);
         vehicle.setStatus(normalizeStatus(status, false));
         Vehicle saved = vehicleRepository.save(vehicle);
@@ -147,15 +148,10 @@ public class VehicleManagementService {
         return toDetail(saved, loadBoundDeviceMap(List.of(saved)));
     }
 
-    private Specification<Vehicle> buildSpecification(Long enterpriseId, Long fleetId, String keyword, Byte status) {
+    private Specification<Vehicle> buildSpecification(BusinessDataScope dataScope, String keyword, Byte status) {
         return (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
-            if (enterpriseId != null) {
-                predicates.add(cb.equal(root.get("enterpriseId"), enterpriseId));
-            }
-            if (fleetId != null) {
-                predicates.add(cb.equal(root.get("fleetId"), fleetId));
-            }
+            predicates.add(dataScope.toPredicate(root, cb, "enterpriseId", "fleetId"));
             if (StringUtils.hasText(keyword)) {
                 String pattern = "%" + keyword.trim() + "%";
                 predicates.add(cb.or(
@@ -177,17 +173,6 @@ public class VehicleManagementService {
     private void validateEnterpriseExists(Long enterpriseId) {
         if (!enterpriseRepository.existsById(enterpriseId)) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId不存在");
-        }
-    }
-
-    private void validateFleetScope(Long fleetId, Long enterpriseId) {
-        if (fleetId == null) {
-            return;
-        }
-        Fleet fleet = fleetRepository.findById(fleetId)
-                .orElseThrow(() -> new BusinessException(ApiCode.INVALID_PARAM, "fleetId不存在"));
-        if (enterpriseId != null && !enterpriseId.equals(fleet.getEnterpriseId())) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
     }
 

@@ -3,13 +3,12 @@ package com.example.demo.auth.controller;
 import com.example.demo.auth.dto.CurrentUserResponseData;
 import com.example.demo.auth.dto.LoginRequest;
 import com.example.demo.auth.dto.LoginResponseData;
-import com.example.demo.auth.security.AnyReadRole;
 import com.example.demo.auth.security.AuthenticatedUser;
-import com.example.demo.auth.security.SystemAdminOrSuperAdmin;
 import com.example.demo.auth.service.AuthService;
 import com.example.demo.common.api.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -34,14 +33,13 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    @AnyReadRole
     public ApiResponse<CurrentUserResponseData> currentUser(Authentication authentication) {
         AuthenticatedUser current = (AuthenticatedUser) authentication.getPrincipal();
         return ApiResponse.success(authService.getCurrentUser(current));
     }
 
     @GetMapping("/admin/ping")
-    @SystemAdminOrSuperAdmin
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'system.read')")
     public ApiResponse<Map<String, String>> adminPing() {
         return ApiResponse.success(Map.of("message", "admin-ok"));
     }
