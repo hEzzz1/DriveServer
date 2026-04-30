@@ -3,11 +3,15 @@ package com.example.demo.ingest;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.auth.entity.UserScopeRole;
+import com.example.demo.auth.model.RoleTemplateCode;
+import com.example.demo.auth.model.ScopeType;
 import com.example.demo.auth.model.SubjectType;
 import com.example.demo.alert.entity.AlertEvent;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
+import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.example.demo.alert.repository.AlertEventRepository;
 import com.example.demo.device.entity.Device;
 import com.example.demo.device.model.EdgeDeviceStatus;
@@ -67,6 +71,9 @@ class IngestModuleIntegrationTest {
     private UserRoleRepository userRoleRepository;
 
     @Autowired
+    private UserScopeRoleRepository userScopeRoleRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -80,6 +87,7 @@ class IngestModuleIntegrationTest {
         alertEventRepository.deleteAll();
         ruleConfigRepository.deleteAll();
         deviceRepository.deleteAll();
+        userScopeRoleRepository.deleteAll();
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
@@ -89,6 +97,7 @@ class IngestModuleIntegrationTest {
         saveSystemUser("system-auto-alert");
         saveDevice();
         bindUserRole(adminUser.getId(), admin.getId());
+        bindScopeRole(adminUser.getId(), RoleTemplateCode.PLATFORM_SUPER_ADMIN.name(), null);
         saveRule("RISK_HIGH", "高风险规则", 3, "0.8000", 3, 60, true, "ENABLED");
         saveRule("RISK_MID", "中风险规则", 2, "0.6500", 5, 60, true, "ENABLED");
         saveRule("RISK_LOW", "低风险规则", 1, "0.5000", 8, 60, true, "ENABLED");
@@ -361,6 +370,20 @@ class IngestModuleIntegrationTest {
         userRole.setRoleId(roleId);
         userRole.setCreatedAt(LocalDateTime.now());
         userRoleRepository.save(userRole);
+    }
+
+    private void bindScopeRole(Long userId, String roleCode, Long enterpriseId) {
+        UserScopeRole role = new UserScopeRole();
+        role.setUserId(userId);
+        role.setRoleCode(roleCode);
+        role.setScopeType(RoleTemplateCode.from(roleCode).orElseThrow().isPlatformRole()
+                ? ScopeType.PLATFORM.name()
+                : ScopeType.ENTERPRISE.name());
+        role.setEnterpriseId(enterpriseId);
+        role.setStatus((byte) 1);
+        role.setCreatedAt(LocalDateTime.now());
+        role.setUpdatedAt(LocalDateTime.now());
+        userScopeRoleRepository.save(role);
     }
 
     private RuleConfig saveRule(String ruleCode,

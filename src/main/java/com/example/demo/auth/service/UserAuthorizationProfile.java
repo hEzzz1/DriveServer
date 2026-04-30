@@ -3,7 +3,7 @@ package com.example.demo.auth.service;
 import java.util.List;
 
 public record UserAuthorizationProfile(
-        List<String> legacyRoles,
+        List<String> roles,
         List<String> platformRoles,
         List<AccessMembership> memberships,
         List<String> permissions,

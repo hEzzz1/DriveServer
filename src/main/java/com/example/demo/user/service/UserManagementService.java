@@ -1,16 +1,11 @@
 package com.example.demo.user.service;
 
-import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
-import com.example.demo.auth.entity.UserRole;
 import com.example.demo.auth.entity.UserScopeRole;
-import com.example.demo.auth.model.RoleCode;
 import com.example.demo.auth.model.RoleTemplateCode;
 import com.example.demo.auth.model.ScopeType;
 import com.example.demo.auth.model.SubjectType;
-import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
-import com.example.demo.auth.repository.UserRoleRepository;
 import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.auth.service.BusinessAccessService;
@@ -19,6 +14,8 @@ import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.enterprise.entity.Enterprise;
 import com.example.demo.enterprise.repository.EnterpriseRepository;
+import com.example.demo.system.dto.SystemAuditPageResponseData;
+import com.example.demo.system.service.SystemAuditService;
 import com.example.demo.user.dto.CreateUserRequest;
 import com.example.demo.user.dto.ResetUserPasswordRequest;
 import com.example.demo.user.dto.RoleItemData;
@@ -26,8 +23,6 @@ import com.example.demo.user.dto.UpdateUserRequest;
 import com.example.demo.user.dto.UserDetailResponseData;
 import com.example.demo.user.dto.UserListItemData;
 import com.example.demo.user.dto.UserPageResponseData;
-import com.example.demo.system.dto.SystemAuditPageResponseData;
-import com.example.demo.system.service.SystemAuditService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -42,11 +37,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 public class UserManagementService {
@@ -54,34 +48,28 @@ public class UserManagementService {
     private static final int DEFAULT_PAGE = 1;
     private static final int DEFAULT_SIZE = 20;
     private static final int MAX_SIZE = 100;
+    private static final byte ACTIVE_SCOPE_ROLE_STATUS = 1;
     private static final Set<String> ENTERPRISE_ADMIN_ASSIGNABLE_ROLES = Set.of(
-            RoleCode.RISK_ADMIN.name(),
-            RoleCode.OPERATOR.name(),
-            RoleCode.ANALYST.name(),
-            RoleCode.VIEWER.name()
+            RoleTemplateCode.ORG_OPERATOR.name(),
+            RoleTemplateCode.ORG_ANALYST.name(),
+            RoleTemplateCode.ORG_VIEWER.name()
     );
 
     private final UserAccountRepository userAccountRepository;
-    private final UserRoleRepository userRoleRepository;
     private final UserScopeRoleRepository userScopeRoleRepository;
-    private final RoleRepository roleRepository;
     private final EnterpriseRepository enterpriseRepository;
     private final PasswordEncoder passwordEncoder;
     private final SystemAuditService systemAuditService;
     private final BusinessAccessService businessAccessService;
 
     public UserManagementService(UserAccountRepository userAccountRepository,
-                                 UserRoleRepository userRoleRepository,
                                  UserScopeRoleRepository userScopeRoleRepository,
-                                 RoleRepository roleRepository,
                                  EnterpriseRepository enterpriseRepository,
                                  PasswordEncoder passwordEncoder,
                                  SystemAuditService systemAuditService,
                                  BusinessAccessService businessAccessService) {
         this.userAccountRepository = userAccountRepository;
-        this.userRoleRepository = userRoleRepository;
         this.userScopeRoleRepository = userScopeRoleRepository;
-        this.roleRepository = roleRepository;
         this.enterpriseRepository = enterpriseRepository;
         this.passwordEncoder = passwordEncoder;
         this.systemAuditService = systemAuditService;
@@ -96,8 +84,8 @@ public class UserManagementService {
             throw new BusinessException(ApiCode.INVALID_PARAM, "用户名已存在");
         }
 
-        List<String> normalizedRoles = validateRequestedRoles(operator, currentUser, request.roles());
-        Long enterpriseId = resolveTargetEnterpriseId(operator, currentUser, request.enterpriseId(), normalizedRoles);
+        List<String> normalizedRoles = validateRequestedRoles(operator, request.roles());
+        Long enterpriseId = resolveTargetEnterpriseId(operator, request.enterpriseId(), normalizedRoles);
         String nickname = StringUtils.hasText(request.nickname()) ? request.nickname().trim() : username;
 
         UserAccount user = new UserAccount();
@@ -111,10 +99,9 @@ public class UserManagementService {
         user.setUpdatedAt(LocalDateTime.now(ZoneOffset.UTC));
         UserAccount saved = userAccountRepository.save(user);
 
-        assignRoles(saved.getId(), normalizedRoles);
         syncScopeRoles(saved, normalizedRoles);
         systemAuditService.record(operator, "USER", "CREATE_USER", "USER", String.valueOf(saved.getId()),
-                "SUCCESS", "创建用户", buildAuditDetail(currentUser, operator.getRoles(), saved, null, snapshot(saved, normalizedRoles)));
+                "SUCCESS", "创建用户", buildAuditDetail(currentUser, resolveOperatorRoles(operator), saved, null, snapshot(saved, normalizedRoles)));
         return toDetail(saved, normalizedRoles, resolveEnterpriseName(saved.getEnterpriseId()));
     }
 
@@ -122,7 +109,7 @@ public class UserManagementService {
     public UserDetailResponseData updateUser(AuthenticatedUser operator, Long userId, UpdateUserRequest request) {
         UserAccount currentUser = getOperatorAccount(operator);
         UserAccount user = getUserAccount(userId);
-        assertCanAccessTarget(operator, currentUser, user);
+        assertCanAccessTarget(operator, user);
         Map<String, Object> before = snapshot(user, loadRoleMap(List.of(userId)).getOrDefault(userId, List.of()));
 
         String username = normalizeUsername(request.username());
@@ -131,7 +118,7 @@ public class UserManagementService {
         }
 
         List<String> currentRoles = loadRoleMap(List.of(userId)).getOrDefault(userId, List.of());
-        Long enterpriseId = resolveUpdatedEnterpriseId(operator, currentUser, user, request.enterpriseId(), currentRoles);
+        Long enterpriseId = resolveUpdatedEnterpriseId(operator, user, request.enterpriseId(), currentRoles);
         user.setUsername(username);
         user.setNickname(StringUtils.hasText(request.nickname()) ? request.nickname().trim() : username);
         user.setEnterpriseId(enterpriseId);
@@ -139,7 +126,7 @@ public class UserManagementService {
         syncScopeRoles(saved, currentRoles);
 
         systemAuditService.record(operator, "USER", "UPDATE_USER_PROFILE", "USER", String.valueOf(saved.getId()),
-                "SUCCESS", "更新用户信息", buildAuditDetail(currentUser, operator.getRoles(), saved, before, snapshot(saved, currentRoles)));
+                "SUCCESS", "更新用户信息", buildAuditDetail(currentUser, resolveOperatorRoles(operator), saved, before, snapshot(saved, currentRoles)));
         return toDetail(saved, currentRoles, resolveEnterpriseName(saved.getEnterpriseId()));
     }
 
@@ -178,9 +165,8 @@ public class UserManagementService {
 
     @Transactional(readOnly = true)
     public UserDetailResponseData getUser(AuthenticatedUser operator, Long userId) {
-        UserAccount currentUser = getOperatorAccount(operator);
         UserAccount user = getUserAccount(userId);
-        assertCanAccessTarget(operator, currentUser, user);
+        assertCanAccessTarget(operator, user);
         List<String> roles = loadRoleMap(List.of(userId)).getOrDefault(userId, List.of());
         return toDetail(user, roles, resolveEnterpriseName(user.getEnterpriseId()));
     }
@@ -189,15 +175,14 @@ public class UserManagementService {
     public UserDetailResponseData updateRoles(AuthenticatedUser operator, Long userId, List<String> requestedRoles) {
         UserAccount currentUser = getOperatorAccount(operator);
         UserAccount user = getUserAccount(userId);
-        assertCanAccessTarget(operator, currentUser, user);
+        assertCanAccessTarget(operator, user);
         List<String> beforeRoles = loadRoleMap(List.of(userId)).getOrDefault(userId, List.of());
         Map<String, Object> before = snapshot(user, beforeRoles);
-        List<String> normalizedRoles = validateRequestedRoles(operator, currentUser, requestedRoles);
-        ensureSuperAdminRetained(user, beforeRoles, normalizedRoles);
-        assignRoles(userId, normalizedRoles);
+        List<String> normalizedRoles = validateRequestedRoles(operator, requestedRoles);
+        ensureSuperAdminRetained(beforeRoles, normalizedRoles);
         syncScopeRoles(user, normalizedRoles);
         systemAuditService.record(operator, "USER", "UPDATE_USER_ROLES", "USER", String.valueOf(user.getId()),
-                "SUCCESS", "更新用户角色", buildAuditDetail(currentUser, operator.getRoles(), user, before, snapshot(user, normalizedRoles)));
+                "SUCCESS", "更新用户角色", buildAuditDetail(currentUser, resolveOperatorRoles(operator), user, before, snapshot(user, normalizedRoles)));
         return toDetail(user, normalizedRoles, resolveEnterpriseName(user.getEnterpriseId()));
     }
 
@@ -208,14 +193,14 @@ public class UserManagementService {
         }
         UserAccount currentUser = getOperatorAccount(operator);
         UserAccount user = getUserAccount(userId);
-        assertCanAccessTarget(operator, currentUser, user);
+        assertCanAccessTarget(operator, user);
         List<String> roles = loadRoleMap(List.of(userId)).getOrDefault(userId, List.of());
         Map<String, Object> before = snapshot(user, roles);
         ensureSuperAdminStatusAllowed(user, roles, enabled);
         user.setStatus(Boolean.TRUE.equals(enabled) ? (byte) 1 : (byte) 0);
         UserAccount saved = userAccountRepository.save(user);
         systemAuditService.record(operator, "USER", "UPDATE_USER_STATUS", "USER", String.valueOf(saved.getId()),
-                "SUCCESS", "更新用户状态", buildAuditDetail(currentUser, operator.getRoles(), saved, before, snapshot(saved, roles)));
+                "SUCCESS", "更新用户状态", buildAuditDetail(currentUser, resolveOperatorRoles(operator), saved, before, snapshot(saved, roles)));
         return toDetail(saved, roles, resolveEnterpriseName(saved.getEnterpriseId()));
     }
 
@@ -223,7 +208,7 @@ public class UserManagementService {
     public UserDetailResponseData resetPassword(AuthenticatedUser operator, Long userId, ResetUserPasswordRequest request) {
         UserAccount currentUser = getOperatorAccount(operator);
         UserAccount user = getUserAccount(userId);
-        assertCanAccessTarget(operator, currentUser, user);
+        assertCanAccessTarget(operator, user);
         if (!StringUtils.hasText(request.newPassword())) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "newPassword不能为空");
         }
@@ -234,24 +219,23 @@ public class UserManagementService {
         Map<String, Object> after = snapshot(saved, roles);
         after.put("passwordReset", true);
         systemAuditService.record(operator, "USER", "RESET_USER_PASSWORD", "USER", String.valueOf(saved.getId()),
-                "SUCCESS", "重置用户密码", buildAuditDetail(currentUser, operator.getRoles(), saved, before, after));
+                "SUCCESS", "重置用户密码", buildAuditDetail(currentUser, resolveOperatorRoles(operator), saved, before, after));
         return toDetail(saved, roles, resolveEnterpriseName(saved.getEnterpriseId()));
     }
 
     @Transactional(readOnly = true)
     public SystemAuditPageResponseData listUserAudits(AuthenticatedUser operator, Long userId, Integer page, Integer size) {
-        UserAccount currentUser = getOperatorAccount(operator);
         UserAccount targetUser = getUserAccount(userId);
-        assertCanAccessTarget(operator, currentUser, targetUser);
+        assertCanAccessTarget(operator, targetUser);
         return systemAuditService.list("USER", null, "USER", String.valueOf(userId), null, null, null, page, size);
     }
 
     @Transactional(readOnly = true)
     public List<RoleItemData> listRoles(AuthenticatedUser operator) {
-        return roleRepository.findAllByOrderByRoleCodeAsc().stream()
-                .filter(role -> RoleCode.from(role.getRoleCode()).isPresent())
-                .filter(role -> canAssignRole(operator, role.getRoleCode()))
-                .map(role -> new RoleItemData(role.getId(), role.getRoleCode(), role.getRoleName()))
+        return RoleTemplateCode.names().stream()
+                .map(RoleTemplateCode::valueOf)
+                .filter(role -> canAssignRole(operator, role.name()))
+                .map(role -> new RoleItemData((long) (role.ordinal() + 1), role.name(), role.displayName()))
                 .toList();
     }
 
@@ -286,15 +270,13 @@ public class UserManagementService {
         if (userIds == null || userIds.isEmpty()) {
             return Map.of();
         }
-        Map<Long, String> roleCodeById = roleRepository.findAllByOrderByRoleCodeAsc().stream()
-                .collect(Collectors.toMap(Role::getId, Role::getRoleCode));
-
-        Map<Long, List<String>> roleMap = new LinkedHashMap<>();
-        for (UserRole assignment : userRoleRepository.findByUserIdIn(userIds)) {
-            roleMap.computeIfAbsent(assignment.getUserId(), key -> new ArrayList<>())
-                    .add(roleCodeById.get(assignment.getRoleId()));
+        Map<Long, LinkedHashSet<String>> roleSets = new LinkedHashMap<>();
+        for (UserScopeRole assignment : userScopeRoleRepository.findByUserIdInAndStatusOrderByIdAsc(userIds, ACTIVE_SCOPE_ROLE_STATUS)) {
+            RoleTemplateCode.from(assignment.getRoleCode()).ifPresent(role ->
+                    roleSets.computeIfAbsent(assignment.getUserId(), key -> new LinkedHashSet<>()).add(role.name()));
         }
-        roleMap.replaceAll((key, value) -> RoleCode.normalizeAll(value));
+        Map<Long, List<String>> roleMap = new LinkedHashMap<>();
+        roleSets.forEach((userId, roles) -> roleMap.put(userId, List.copyOf(roles)));
         return roleMap;
     }
 
@@ -302,7 +284,7 @@ public class UserManagementService {
         if (requestedRoles == null) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "roles不能为空");
         }
-        List<String> normalizedRoles = RoleCode.normalizeAll(requestedRoles);
+        List<String> normalizedRoles = RoleTemplateCode.normalizeAll(requestedRoles);
         long distinctInputCount = requestedRoles.stream()
                 .filter(StringUtils::hasText)
                 .map(String::trim)
@@ -332,6 +314,10 @@ public class UserManagementService {
         return getUserAccount(operator.getUserId());
     }
 
+    private List<String> resolveOperatorRoles(AuthenticatedUser operator) {
+        return businessAccessService.getAuthorizationProfile(operator).roles();
+    }
+
     private BusinessDataScope resolveUserEnterpriseScope(AuthenticatedUser operator, Long requestedEnterpriseId) {
         BusinessDataScope scope = businessAccessService.getAuthorizationProfile(operator).dataScope();
         if (scope.platformWide()) {
@@ -352,7 +338,6 @@ public class UserManagementService {
     }
 
     private Long resolveTargetEnterpriseId(AuthenticatedUser operator,
-                                           UserAccount currentUser,
                                            Long requestedEnterpriseId,
                                            List<String> requestedRoles) {
         if (isSuperAdmin(operator)) {
@@ -360,11 +345,7 @@ public class UserManagementService {
                 return requestedEnterpriseId == null ? null : requireEnterpriseExists(requestedEnterpriseId).getId();
             }
             if (requestedEnterpriseId == null) {
-                Set<Long> manageableEnterpriseIds = resolveManageableEnterpriseIds(operator);
-                if (manageableEnterpriseIds.size() != 1) {
-                    throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId不能为空");
-                }
-                return manageableEnterpriseIds.iterator().next();
+                throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId不能为空");
             }
             return requireEnterpriseExists(requestedEnterpriseId).getId();
         }
@@ -380,7 +361,6 @@ public class UserManagementService {
     }
 
     private Long resolveUpdatedEnterpriseId(AuthenticatedUser operator,
-                                            UserAccount currentUser,
                                             UserAccount targetUser,
                                             Long requestedEnterpriseId,
                                             List<String> currentRoles) {
@@ -399,7 +379,7 @@ public class UserManagementService {
         return requireEnterpriseExists(requestedEnterpriseId).getId();
     }
 
-    private List<String> validateRequestedRoles(AuthenticatedUser operator, UserAccount currentUser, List<String> requestedRoles) {
+    private List<String> validateRequestedRoles(AuthenticatedUser operator, List<String> requestedRoles) {
         List<String> normalizedRoles = normalizeRequestedRoles(requestedRoles);
         if (!normalizedRoles.stream().allMatch(role -> canAssignRole(operator, role))) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
@@ -410,7 +390,7 @@ public class UserManagementService {
         return normalizedRoles;
     }
 
-    private void assertCanAccessTarget(AuthenticatedUser operator, UserAccount currentUser, UserAccount targetUser) {
+    private void assertCanAccessTarget(AuthenticatedUser operator, UserAccount targetUser) {
         if (isSuperAdmin(operator)) {
             return;
         }
@@ -418,29 +398,6 @@ public class UserManagementService {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
         businessAccessService.assertCanManageEnterprise(operator, targetUser.getEnterpriseId());
-    }
-
-    private void assignRoles(Long userId, List<String> normalizedRoles) {
-        Map<String, Role> rolesByCode = roleRepository.findByRoleCodeIn(normalizedRoles).stream()
-                .collect(Collectors.toMap(Role::getRoleCode, Function.identity()));
-        if (rolesByCode.size() != normalizedRoles.size()) {
-            throw new BusinessException(ApiCode.INVALID_PARAM, "存在不支持的角色编码");
-        }
-
-        userRoleRepository.deleteByUserId(userId);
-        if (normalizedRoles.isEmpty()) {
-            return;
-        }
-
-        List<UserRole> assignments = new ArrayList<>();
-        for (String roleCode : normalizedRoles) {
-            UserRole assignment = new UserRole();
-            assignment.setUserId(userId);
-            assignment.setRoleId(rolesByCode.get(roleCode).getId());
-            assignment.setCreatedAt(LocalDateTime.now(ZoneOffset.UTC));
-            assignments.add(assignment);
-        }
-        userRoleRepository.saveAll(assignments);
     }
 
     private void syncScopeRoles(UserAccount user, List<String> normalizedRoles) {
@@ -452,14 +409,12 @@ public class UserManagementService {
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         List<UserScopeRole> assignments = new ArrayList<>();
         for (String roleCode : normalizedRoles) {
-            RoleTemplateCode templateCode = toTemplateCode(roleCode);
-            if (templateCode == null) {
-                continue;
-            }
+            RoleTemplateCode templateCode = RoleTemplateCode.from(roleCode)
+                    .orElseThrow(() -> new BusinessException(ApiCode.INVALID_PARAM, "存在不支持的角色编码"));
             UserScopeRole assignment = new UserScopeRole();
             assignment.setUserId(user.getId());
             assignment.setRoleCode(templateCode.name());
-            assignment.setStatus((byte) 1);
+            assignment.setStatus(ACTIVE_SCOPE_ROLE_STATUS);
             assignment.setCreatedAt(now);
             assignment.setUpdatedAt(now);
             if (templateCode.isPlatformRole()) {
@@ -476,21 +431,28 @@ public class UserManagementService {
         userScopeRoleRepository.saveAll(assignments);
     }
 
-    private void ensureSuperAdminRetained(UserAccount user, List<String> beforeRoles, List<String> afterRoles) {
-        if (!beforeRoles.contains(RoleCode.SUPER_ADMIN.name()) || afterRoles.contains(RoleCode.SUPER_ADMIN.name())) {
+    private void ensureSuperAdminRetained(List<String> beforeRoles, List<String> afterRoles) {
+        if (!beforeRoles.contains(RoleTemplateCode.PLATFORM_SUPER_ADMIN.name())
+                || afterRoles.contains(RoleTemplateCode.PLATFORM_SUPER_ADMIN.name())) {
             return;
         }
-        if (userAccountRepository.countEnabledUsersByRoleCode(SubjectType.USER.name(), RoleCode.SUPER_ADMIN.name()) <= 1) {
-            throw new BusinessException(ApiCode.INVALID_PARAM, "至少保留一个SUPER_ADMIN");
+        if (userScopeRoleRepository.countEnabledUsersByRoleCode(
+                SubjectType.USER.name(),
+                ACTIVE_SCOPE_ROLE_STATUS,
+                RoleTemplateCode.PLATFORM_SUPER_ADMIN.name()) <= 1) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "至少保留一个平台超级管理员");
         }
     }
 
     private void ensureSuperAdminStatusAllowed(UserAccount user, List<String> roles, Boolean enabled) {
-        if (!roles.contains(RoleCode.SUPER_ADMIN.name()) || Boolean.TRUE.equals(enabled) || !isEnabled(user)) {
+        if (!roles.contains(RoleTemplateCode.PLATFORM_SUPER_ADMIN.name()) || Boolean.TRUE.equals(enabled) || !isEnabled(user)) {
             return;
         }
-        if (userAccountRepository.countEnabledUsersByRoleCode(SubjectType.USER.name(), RoleCode.SUPER_ADMIN.name()) <= 1) {
-            throw new BusinessException(ApiCode.INVALID_PARAM, "至少保留一个SUPER_ADMIN");
+        if (userScopeRoleRepository.countEnabledUsersByRoleCode(
+                SubjectType.USER.name(),
+                ACTIVE_SCOPE_ROLE_STATUS,
+                RoleTemplateCode.PLATFORM_SUPER_ADMIN.name()) <= 1) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "至少保留一个平台超级管理员");
         }
     }
 
@@ -499,14 +461,7 @@ public class UserManagementService {
     }
 
     private boolean isSuperAdmin(AuthenticatedUser operator) {
-        return operator.getRoles().contains(RoleCode.SUPER_ADMIN.name());
-    }
-
-    private Long requireEnterpriseId(UserAccount user) {
-        if (user.getEnterpriseId() == null) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
-        }
-        return user.getEnterpriseId();
+        return businessAccessService.isSuperAdmin(operator);
     }
 
     private String normalizeUsername(String username) {
@@ -517,9 +472,10 @@ public class UserManagementService {
     }
 
     private boolean containsPlatformRole(List<String> roles) {
-        return roles.contains(RoleCode.SUPER_ADMIN.name())
-                || roles.contains(RoleCode.SYS_ADMIN.name())
-                || roles.contains(RoleCode.RISK_ADMIN.name());
+        return roles.stream()
+                .map(RoleTemplateCode::from)
+                .flatMap(java.util.Optional::stream)
+                .anyMatch(RoleTemplateCode::isPlatformRole);
     }
 
     private Set<Long> resolveManageableEnterpriseIds(AuthenticatedUser operator) {
@@ -579,7 +535,7 @@ public class UserManagementService {
     private List<String> buildScopeRoleSnapshot(UserAccount user, List<String> roles) {
         List<String> snapshots = new ArrayList<>();
         for (String role : roles) {
-            RoleTemplateCode templateCode = toTemplateCode(role);
+            RoleTemplateCode templateCode = RoleTemplateCode.from(role).orElse(null);
             if (templateCode == null) {
                 continue;
             }
@@ -590,22 +546,6 @@ public class UserManagementService {
             }
         }
         return snapshots;
-    }
-
-    private RoleTemplateCode toTemplateCode(String roleCode) {
-        RoleCode normalized = RoleCode.from(roleCode).orElse(null);
-        if (normalized == null) {
-            return null;
-        }
-        return switch (normalized) {
-            case SUPER_ADMIN -> RoleTemplateCode.PLATFORM_SUPER_ADMIN;
-            case SYS_ADMIN -> RoleTemplateCode.PLATFORM_SYS_ADMIN;
-            case RISK_ADMIN -> RoleTemplateCode.PLATFORM_RISK_ADMIN;
-            case ENTERPRISE_ADMIN -> RoleTemplateCode.ORG_ADMIN;
-            case OPERATOR -> RoleTemplateCode.ORG_OPERATOR;
-            case ANALYST -> RoleTemplateCode.ORG_ANALYST;
-            case VIEWER -> RoleTemplateCode.ORG_VIEWER;
-        };
     }
 
     private int normalizePage(Integer page) {

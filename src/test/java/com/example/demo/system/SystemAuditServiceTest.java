@@ -54,7 +54,7 @@ class SystemAuditServiceTest {
         when(repository.save(any(SystemAuditLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
         SystemAuditService service = new SystemAuditService(repository, new ObjectMapper());
 
-        AuthenticatedUser operator = new AuthenticatedUser(99L, "admin", List.of("SUPER_ADMIN"));
+        AuthenticatedUser operator = new AuthenticatedUser(99L, "admin", List.of("PLATFORM_SUPER_ADMIN"));
         service.record(operator, "RULE", "CREATE_RULE", "RULE", "42", "SUCCESS", "创建规则", null);
 
         ArgumentCaptor<SystemAuditLog> captor = ArgumentCaptor.forClass(SystemAuditLog.class);

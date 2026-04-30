@@ -5,10 +5,14 @@ import com.example.demo.alert.repository.AlertEventRepository;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.auth.entity.UserScopeRole;
+import com.example.demo.auth.model.RoleTemplateCode;
+import com.example.demo.auth.model.ScopeType;
 import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
+import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +54,9 @@ class AlertModuleIntegrationTest {
     private UserRoleRepository userRoleRepository;
 
     @Autowired
+    private UserScopeRoleRepository userScopeRoleRepository;
+
+    @Autowired
     private AlertEventRepository alertEventRepository;
 
     @Autowired
@@ -62,6 +69,7 @@ class AlertModuleIntegrationTest {
     void setUp() {
         alertActionLogRepository.deleteAll();
         alertEventRepository.deleteAll();
+        userScopeRoleRepository.deleteAll();
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
@@ -77,6 +85,9 @@ class AlertModuleIntegrationTest {
         bindUserRole(adminUser.getId(), admin.getId());
         bindUserRole(operatorUser.getId(), operator.getId());
         bindUserRole(viewerUser.getId(), viewer.getId());
+        bindScopeRole(adminUser.getId(), RoleTemplateCode.PLATFORM_SUPER_ADMIN.name(), null);
+        bindScopeRole(operatorUser.getId(), RoleTemplateCode.ORG_OPERATOR.name(), ENTERPRISE_ID);
+        bindScopeRole(viewerUser.getId(), RoleTemplateCode.ORG_VIEWER.name(), ENTERPRISE_ID);
     }
 
     @Test
@@ -341,6 +352,20 @@ class AlertModuleIntegrationTest {
         userRole.setRoleId(roleId);
         userRole.setCreatedAt(LocalDateTime.now());
         userRoleRepository.save(userRole);
+    }
+
+    private void bindScopeRole(Long userId, String roleCode, Long enterpriseId) {
+        UserScopeRole role = new UserScopeRole();
+        role.setUserId(userId);
+        role.setRoleCode(roleCode);
+        role.setScopeType(RoleTemplateCode.from(roleCode).orElseThrow().isPlatformRole()
+                ? ScopeType.PLATFORM.name()
+                : ScopeType.ENTERPRISE.name());
+        role.setEnterpriseId(enterpriseId);
+        role.setStatus((byte) 1);
+        role.setCreatedAt(LocalDateTime.now());
+        role.setUpdatedAt(LocalDateTime.now());
+        userScopeRoleRepository.save(role);
     }
 
     private String loginAndGetToken(String username, String password) throws Exception {

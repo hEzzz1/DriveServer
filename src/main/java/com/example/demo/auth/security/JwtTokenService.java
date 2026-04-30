@@ -1,6 +1,6 @@
 package com.example.demo.auth.security;
 
-import com.example.demo.auth.model.RoleCode;
+import com.example.demo.auth.model.RoleTemplateCode;
 import com.example.demo.auth.model.SubjectType;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -41,7 +41,7 @@ public class JwtTokenService {
     public JwtTokenResult issueToken(Long userId, String username, List<String> roles) {
         Instant now = Instant.now();
         Instant expireAt = now.plusSeconds(jwtProperties.getExpireSeconds());
-        List<String> normalizedRoles = RoleCode.normalizeAll(roles);
+        List<String> normalizedRoles = RoleTemplateCode.normalizeAll(roles);
 
         String token = Jwts.builder()
                 .subject(username)
@@ -85,7 +85,7 @@ public class JwtTokenService {
         if (!(value instanceof List<?> list)) {
             return List.of();
         }
-        return RoleCode.normalizeAll(list.stream()
+        return RoleTemplateCode.normalizeAll(list.stream()
                 .filter(String.class::isInstance)
                 .map(String.class::cast)
                 .toList());

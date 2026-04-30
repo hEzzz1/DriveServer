@@ -264,6 +264,6 @@ class DeviceServiceTest {
     }
 
     private AuthenticatedUser operator() {
-        return new AuthenticatedUser(1L, "admin", List.of("SUPER_ADMIN"));
+        return new AuthenticatedUser(1L, "admin", List.of("PLATFORM_SUPER_ADMIN"));
     }
 }

@@ -3,10 +3,14 @@ package com.example.demo.user;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.auth.entity.UserScopeRole;
+import com.example.demo.auth.model.RoleTemplateCode;
+import com.example.demo.auth.model.ScopeType;
 import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
+import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.example.demo.enterprise.entity.Enterprise;
 import com.example.demo.enterprise.repository.EnterpriseRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -48,6 +52,9 @@ class UserManagementIntegrationTest {
     private UserRoleRepository userRoleRepository;
 
     @Autowired
+    private UserScopeRoleRepository userScopeRoleRepository;
+
+    @Autowired
     private EnterpriseRepository enterpriseRepository;
 
     @Autowired
@@ -63,6 +70,7 @@ class UserManagementIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        userScopeRoleRepository.deleteAll();
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
@@ -91,6 +99,12 @@ class UserManagementIntegrationTest {
         bindUserRole(enterpriseViewerBUser.getId(), viewer.getId());
         bindUserRole(enterpriseViewerAUser.getId(), operator.getId());
         bindUserRole(enterpriseViewerBUser.getId(), riskAdmin.getId());
+        bindScopeRole(superAdminUser.getId(), RoleTemplateCode.PLATFORM_SUPER_ADMIN.name(), null);
+        bindScopeRole(enterpriseAdminAUser.getId(), RoleTemplateCode.ORG_ADMIN.name(), enterpriseA.getId());
+        bindScopeRole(enterpriseViewerAUser.getId(), RoleTemplateCode.ORG_VIEWER.name(), enterpriseA.getId());
+        bindScopeRole(enterpriseViewerBUser.getId(), RoleTemplateCode.ORG_VIEWER.name(), enterpriseB.getId());
+        bindScopeRole(enterpriseViewerAUser.getId(), RoleTemplateCode.ORG_OPERATOR.name(), enterpriseA.getId());
+        bindScopeRole(enterpriseViewerBUser.getId(), RoleTemplateCode.PLATFORM_RISK_ADMIN.name(), null);
     }
 
     @Test
@@ -143,13 +157,13 @@ class UserManagementIntegrationTest {
                                   "nickname": "new-user-a",
                                   "enterpriseId": %d,
                                   "enabled": true,
-                                  "roles": ["VIEWER"]
+                                  "roles": ["ORG_VIEWER"]
                                 }
                                 """.formatted(enterpriseA.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.username").value("new-user-a"))
                 .andExpect(jsonPath("$.data.enterpriseId").value(enterpriseA.getId()))
-                .andExpect(jsonPath("$.data.roles[0]").value("VIEWER"));
+                .andExpect(jsonPath("$.data.roles[0]").value("ORG_VIEWER"));
     }
 
     @Test
@@ -166,7 +180,7 @@ class UserManagementIntegrationTest {
                                   "nickname": "new-user-bad",
                                   "enterpriseId": %d,
                                   "enabled": true,
-                                  "roles": ["VIEWER"]
+                                  "roles": ["ORG_VIEWER"]
                                 }
                                 """.formatted(enterpriseB.getId())))
                 .andExpect(status().isForbidden())
@@ -182,19 +196,19 @@ class UserManagementIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "roles": ["OPERATOR", "VIEWER"]
+                                  "roles": ["ORG_OPERATOR", "ORG_VIEWER"]
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.roles[0]").value("OPERATOR"))
-                .andExpect(jsonPath("$.data.roles[1]").value("VIEWER"));
+                .andExpect(jsonPath("$.data.roles[0]").value("ORG_OPERATOR"))
+                .andExpect(jsonPath("$.data.roles[1]").value("ORG_VIEWER"));
 
         mockMvc.perform(put("/api/v1/users/{id}/roles", enterpriseViewerAUser.getId())
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "roles": ["SYS_ADMIN"]
+                                  "roles": ["PLATFORM_SYS_ADMIN"]
                                 }
                                 """))
                 .andExpect(status().isForbidden())
@@ -208,11 +222,10 @@ class UserManagementIntegrationTest {
         mockMvc.perform(get("/api/v1/roles")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.length()").value(4))
-                .andExpect(jsonPath("$.data[0].roleCode").value("ANALYST"))
-                .andExpect(jsonPath("$.data[1].roleCode").value("OPERATOR"))
-                .andExpect(jsonPath("$.data[2].roleCode").value("RISK_ADMIN"))
-                .andExpect(jsonPath("$.data[3].roleCode").value("VIEWER"));
+                .andExpect(jsonPath("$.data.length()").value(3))
+                .andExpect(jsonPath("$.data[0].roleCode").value("ORG_OPERATOR"))
+                .andExpect(jsonPath("$.data[1].roleCode").value("ORG_ANALYST"))
+                .andExpect(jsonPath("$.data[2].roleCode").value("ORG_VIEWER"));
     }
 
     @Test
@@ -274,6 +287,20 @@ class UserManagementIntegrationTest {
         userRole.setRoleId(roleId);
         userRole.setCreatedAt(LocalDateTime.now());
         userRoleRepository.save(userRole);
+    }
+
+    private void bindScopeRole(Long userId, String roleCode, Long enterpriseId) {
+        UserScopeRole role = new UserScopeRole();
+        role.setUserId(userId);
+        role.setRoleCode(roleCode);
+        role.setScopeType(RoleTemplateCode.from(roleCode).orElseThrow().isPlatformRole()
+                ? ScopeType.PLATFORM.name()
+                : ScopeType.ENTERPRISE.name());
+        role.setEnterpriseId(enterpriseId);
+        role.setStatus((byte) 1);
+        role.setCreatedAt(LocalDateTime.now());
+        role.setUpdatedAt(LocalDateTime.now());
+        userScopeRoleRepository.save(role);
     }
 
     private String loginAndGetToken(String username, String password) throws Exception {

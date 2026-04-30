@@ -3,10 +3,14 @@ package com.example.demo.realtime;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.auth.entity.UserScopeRole;
+import com.example.demo.auth.model.RoleTemplateCode;
+import com.example.demo.auth.model.ScopeType;
 import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
+import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.example.demo.realtime.dto.AlertRealtimeMessage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,10 +66,14 @@ class RealtimeModuleIntegrationTest {
     private UserRoleRepository userRoleRepository;
 
     @Autowired
+    private UserScopeRoleRepository userScopeRoleRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void setUp() {
+        userScopeRoleRepository.deleteAll();
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
@@ -73,6 +81,7 @@ class RealtimeModuleIntegrationTest {
         Role operator = saveRole("OPERATOR", "运维操作员");
         UserAccount operatorUser = saveUser("operator", "123456", 1, ENTERPRISE_ID);
         bindUserRole(operatorUser.getId(), operator.getId());
+        bindScopeRole(operatorUser.getId(), RoleTemplateCode.ORG_OPERATOR.name(), ENTERPRISE_ID);
     }
 
     @Test
@@ -229,5 +238,19 @@ class RealtimeModuleIntegrationTest {
         userRole.setRoleId(roleId);
         userRole.setCreatedAt(LocalDateTime.now());
         userRoleRepository.save(userRole);
+    }
+
+    private void bindScopeRole(Long userId, String roleCode, Long enterpriseId) {
+        UserScopeRole role = new UserScopeRole();
+        role.setUserId(userId);
+        role.setRoleCode(roleCode);
+        role.setScopeType(RoleTemplateCode.from(roleCode).orElseThrow().isPlatformRole()
+                ? ScopeType.PLATFORM.name()
+                : ScopeType.ENTERPRISE.name());
+        role.setEnterpriseId(enterpriseId);
+        role.setStatus((byte) 1);
+        role.setCreatedAt(LocalDateTime.now());
+        role.setUpdatedAt(LocalDateTime.now());
+        userScopeRoleRepository.save(role);
     }
 }

@@ -5,10 +5,14 @@ import com.example.demo.alert.repository.AlertEventRepository;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.auth.entity.UserScopeRole;
+import com.example.demo.auth.model.RoleTemplateCode;
+import com.example.demo.auth.model.ScopeType;
 import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
+import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.example.demo.enterprise.entity.Enterprise;
 import com.example.demo.enterprise.repository.EnterpriseRepository;
 import com.example.demo.fleet.entity.Fleet;
@@ -56,6 +60,9 @@ class RealtimeOverviewIntegrationTest {
     private UserRoleRepository userRoleRepository;
 
     @Autowired
+    private UserScopeRoleRepository userScopeRoleRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -70,6 +77,7 @@ class RealtimeOverviewIntegrationTest {
     @BeforeEach
     void setUp() {
         alertEventRepository.deleteAll();
+        userScopeRoleRepository.deleteAll();
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
@@ -81,6 +89,7 @@ class RealtimeOverviewIntegrationTest {
         Role viewer = saveRole("VIEWER", "观察员");
         UserAccount viewerUser = saveUser("viewer", "123456", 1, enterpriseId);
         bindUserRole(viewerUser.getId(), viewer.getId());
+        bindScopeRole(viewerUser.getId(), RoleTemplateCode.ORG_VIEWER.name(), enterpriseId);
     }
 
     @Test
@@ -192,6 +201,20 @@ class RealtimeOverviewIntegrationTest {
         userRole.setRoleId(roleId);
         userRole.setCreatedAt(LocalDateTime.now());
         userRoleRepository.save(userRole);
+    }
+
+    private void bindScopeRole(Long userId, String roleCode, Long enterpriseId) {
+        UserScopeRole role = new UserScopeRole();
+        role.setUserId(userId);
+        role.setRoleCode(roleCode);
+        role.setScopeType(RoleTemplateCode.from(roleCode).orElseThrow().isPlatformRole()
+                ? ScopeType.PLATFORM.name()
+                : ScopeType.ENTERPRISE.name());
+        role.setEnterpriseId(enterpriseId);
+        role.setStatus((byte) 1);
+        role.setCreatedAt(LocalDateTime.now());
+        role.setUpdatedAt(LocalDateTime.now());
+        userScopeRoleRepository.save(role);
     }
 
     private String loginAndGetToken(String username, String password) throws Exception {

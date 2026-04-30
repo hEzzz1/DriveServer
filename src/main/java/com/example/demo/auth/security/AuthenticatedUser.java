@@ -1,6 +1,6 @@
 package com.example.demo.auth.security;
 
-import com.example.demo.auth.model.RoleCode;
+import com.example.demo.auth.model.RoleTemplateCode;
 import com.example.demo.auth.model.SubjectType;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -23,7 +23,7 @@ public class AuthenticatedUser {
         this.userId = userId;
         this.username = username;
         this.subjectType = subjectType == null ? SubjectType.USER : subjectType;
-        this.roles = RoleCode.normalizeAll(roles);
+        this.roles = RoleTemplateCode.normalizeAll(roles);
     }
 
     public Long getUserId() {

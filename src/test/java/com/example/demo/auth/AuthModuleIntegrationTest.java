@@ -3,10 +3,14 @@ package com.example.demo.auth;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.auth.entity.UserScopeRole;
+import com.example.demo.auth.model.RoleTemplateCode;
+import com.example.demo.auth.model.ScopeType;
 import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
+import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.example.demo.enterprise.entity.Enterprise;
 import com.example.demo.enterprise.repository.EnterpriseRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -49,6 +53,9 @@ class AuthModuleIntegrationTest {
     private UserRoleRepository userRoleRepository;
 
     @Autowired
+    private UserScopeRoleRepository userScopeRoleRepository;
+
+    @Autowired
     private EnterpriseRepository enterpriseRepository;
 
     @Autowired
@@ -56,6 +63,7 @@ class AuthModuleIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        userScopeRoleRepository.deleteAll();
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
@@ -80,6 +88,9 @@ class AuthModuleIntegrationTest {
         bindUserRole(adminUser.getId(), admin.getId());
         bindUserRole(viewerUser.getId(), viewer.getId());
         bindUserRole(enterpriseAdminUser.getId(), enterpriseAdmin.getId());
+        bindScopeRole(adminUser.getId(), RoleTemplateCode.PLATFORM_SUPER_ADMIN.name(), null);
+        bindScopeRole(viewerUser.getId(), RoleTemplateCode.ORG_VIEWER.name(), savedEnterprise.getId());
+        bindScopeRole(enterpriseAdminUser.getId(), RoleTemplateCode.ORG_ADMIN.name(), savedEnterprise.getId());
     }
 
     @Test
@@ -95,7 +106,7 @@ class AuthModuleIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.token").isNotEmpty())
-                .andExpect(jsonPath("$.data.roles[0]").value("SUPER_ADMIN"));
+                .andExpect(jsonPath("$.data.roles[0]").value("PLATFORM_SUPER_ADMIN"));
     }
 
     @Test
@@ -136,7 +147,7 @@ class AuthModuleIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.username").value("enterprise-admin"))
-                .andExpect(jsonPath("$.data.roles[0]").value("ENTERPRISE_ADMIN"));
+                .andExpect(jsonPath("$.data.roles[0]").value("ORG_ADMIN"));
     }
 
     @Test
@@ -193,6 +204,20 @@ class AuthModuleIntegrationTest {
         userRole.setRoleId(roleId);
         userRole.setCreatedAt(LocalDateTime.now());
         userRoleRepository.save(userRole);
+    }
+
+    private void bindScopeRole(Long userId, String roleCode, Long enterpriseId) {
+        UserScopeRole role = new UserScopeRole();
+        role.setUserId(userId);
+        role.setRoleCode(roleCode);
+        role.setScopeType(RoleTemplateCode.from(roleCode).orElseThrow().isPlatformRole()
+                ? ScopeType.PLATFORM.name()
+                : ScopeType.ENTERPRISE.name());
+        role.setEnterpriseId(enterpriseId);
+        role.setStatus((byte) 1);
+        role.setCreatedAt(LocalDateTime.now());
+        role.setUpdatedAt(LocalDateTime.now());
+        userScopeRoleRepository.save(role);
     }
 
     private String loginAndGetToken(String username, String password) throws Exception {

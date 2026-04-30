@@ -61,8 +61,8 @@ public class AuthService {
             throw new BusinessException(ApiCode.FORBIDDEN, "账号未分配角色");
         }
 
-        JwtTokenResult tokenResult = jwtTokenService.issueToken(user.getId(), user.getUsername(), profile.legacyRoles());
-        return new LoginResponseData(tokenResult.token(), tokenResult.expireAt(), profile.legacyRoles());
+        JwtTokenResult tokenResult = jwtTokenService.issueToken(user.getId(), user.getUsername(), profile.roles());
+        return new LoginResponseData(tokenResult.token(), tokenResult.expireAt(), profile.roles());
     }
 
     public CurrentUserResponseData getCurrentUser(AuthenticatedUser authenticatedUser) {
@@ -78,7 +78,7 @@ public class AuthService {
                 user.getId(),
                 user.getUsername(),
                 user.getNickname(),
-                profile.legacyRoles(),
+                profile.roles(),
                 profile.platformRoles(),
                 profile.memberships().stream()
                         .map(membership -> new CurrentUserMembershipData(

@@ -8,28 +8,28 @@ import java.util.Optional;
 import java.util.Set;
 
 public enum RoleTemplateCode {
-    PLATFORM_SUPER_ADMIN(true, RoleCode.SUPER_ADMIN.name()),
-    PLATFORM_SYS_ADMIN(true, RoleCode.SYS_ADMIN.name()),
-    PLATFORM_RISK_ADMIN(true, RoleCode.RISK_ADMIN.name()),
-    ORG_ADMIN(false, RoleCode.ENTERPRISE_ADMIN.name()),
-    ORG_OPERATOR(false, RoleCode.OPERATOR.name()),
-    ORG_ANALYST(false, RoleCode.ANALYST.name()),
-    ORG_VIEWER(false, RoleCode.VIEWER.name());
+    PLATFORM_SUPER_ADMIN(true, "平台超级管理员"),
+    PLATFORM_SYS_ADMIN(true, "平台系统管理员"),
+    PLATFORM_RISK_ADMIN(true, "平台风控管理员"),
+    ORG_ADMIN(false, "组织管理员"),
+    ORG_OPERATOR(false, "组织运营处理人员"),
+    ORG_ANALYST(false, "组织分析查看人员"),
+    ORG_VIEWER(false, "组织只读观察人员");
 
     private final boolean platformRole;
-    private final String legacyRoleCode;
+    private final String displayName;
 
-    RoleTemplateCode(boolean platformRole, String legacyRoleCode) {
+    RoleTemplateCode(boolean platformRole, String displayName) {
         this.platformRole = platformRole;
-        this.legacyRoleCode = legacyRoleCode;
+        this.displayName = displayName;
     }
 
     public boolean isPlatformRole() {
         return platformRole;
     }
 
-    public String legacyRoleCode() {
-        return legacyRoleCode;
+    public String displayName() {
+        return displayName;
     }
 
     public boolean supportsScope(ScopeType scopeType) {

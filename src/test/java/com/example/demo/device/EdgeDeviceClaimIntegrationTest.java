@@ -3,10 +3,14 @@ package com.example.demo.device;
 import com.example.demo.auth.entity.Role;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserRole;
+import com.example.demo.auth.entity.UserScopeRole;
+import com.example.demo.auth.model.RoleTemplateCode;
+import com.example.demo.auth.model.ScopeType;
 import com.example.demo.auth.model.SubjectType;
 import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserRoleRepository;
+import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.example.demo.device.entity.Device;
 import com.example.demo.device.entity.EdgeDeviceBindLog;
 import com.example.demo.device.repository.DeviceRepository;
@@ -62,6 +66,9 @@ class EdgeDeviceClaimIntegrationTest {
     private UserRoleRepository userRoleRepository;
 
     @Autowired
+    private UserScopeRoleRepository userScopeRoleRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     private Enterprise enterpriseA;
@@ -69,6 +76,7 @@ class EdgeDeviceClaimIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        userScopeRoleRepository.deleteAll();
         userRoleRepository.deleteAll();
         roleRepository.deleteAll();
         userAccountRepository.deleteAll();
@@ -85,6 +93,8 @@ class EdgeDeviceClaimIntegrationTest {
         UserAccount enterpriseAdminUser = saveUser("enterprise-admin", "123456", enterpriseA.getId());
         bindUserRole(superAdminUser.getId(), superAdmin.getId());
         bindUserRole(enterpriseAdminUser.getId(), enterpriseAdmin.getId());
+        bindScopeRole(superAdminUser.getId(), RoleTemplateCode.PLATFORM_SUPER_ADMIN.name(), null);
+        bindScopeRole(enterpriseAdminUser.getId(), RoleTemplateCode.ORG_ADMIN.name(), enterpriseA.getId());
     }
 
     @Test
@@ -334,6 +344,20 @@ class EdgeDeviceClaimIntegrationTest {
         userRole.setRoleId(roleId);
         userRole.setCreatedAt(LocalDateTime.now());
         userRoleRepository.save(userRole);
+    }
+
+    private void bindScopeRole(Long userId, String roleCode, Long enterpriseId) {
+        UserScopeRole role = new UserScopeRole();
+        role.setUserId(userId);
+        role.setRoleCode(roleCode);
+        role.setScopeType(RoleTemplateCode.from(roleCode).orElseThrow().isPlatformRole()
+                ? ScopeType.PLATFORM.name()
+                : ScopeType.ENTERPRISE.name());
+        role.setEnterpriseId(enterpriseId);
+        role.setStatus((byte) 1);
+        role.setCreatedAt(LocalDateTime.now());
+        role.setUpdatedAt(LocalDateTime.now());
+        userScopeRoleRepository.save(role);
     }
 
     private String loginAndGetToken(String username, String password) throws Exception {

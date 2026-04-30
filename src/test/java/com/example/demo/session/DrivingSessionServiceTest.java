@@ -137,7 +137,7 @@ class DrivingSessionServiceTest {
     }
 
     private AuthenticatedUser operator() {
-        return new AuthenticatedUser(99L, "admin", List.of("SUPER_ADMIN"));
+        return new AuthenticatedUser(99L, "admin", List.of("PLATFORM_SUPER_ADMIN"));
     }
 
     private Enterprise enterprise(Long id, String name) {

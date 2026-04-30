@@ -2,11 +2,9 @@ package com.example.demo.auth.service;
 
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserScopeRole;
-import com.example.demo.auth.model.RoleCode;
 import com.example.demo.auth.model.RoleTemplateCode;
 import com.example.demo.auth.model.ScopeType;
 import com.example.demo.auth.model.SubjectType;
-import com.example.demo.auth.repository.RoleRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.example.demo.auth.security.AuthenticatedUser;
@@ -25,14 +23,11 @@ public class UserAuthorizationService {
     private static final byte ACTIVE_STATUS = 1;
 
     private final UserAccountRepository userAccountRepository;
-    private final RoleRepository roleRepository;
     private final UserScopeRoleRepository userScopeRoleRepository;
 
     public UserAuthorizationService(UserAccountRepository userAccountRepository,
-                                    RoleRepository roleRepository,
                                     UserScopeRoleRepository userScopeRoleRepository) {
         this.userAccountRepository = userAccountRepository;
-        this.roleRepository = roleRepository;
         this.userScopeRoleRepository = userScopeRoleRepository;
     }
 
@@ -51,15 +46,9 @@ public class UserAuthorizationService {
         }
 
         List<ResolvedAssignment> resolvedAssignments = resolveExplicitAssignments(user.getId());
-        List<String> legacyRoles;
-        if (resolvedAssignments.isEmpty()) {
-            legacyRoles = RoleCode.normalizeAll(roleRepository.findRoleCodesByUserId(user.getId()));
-            resolvedAssignments = deriveLegacyAssignments(user, legacyRoles);
-        } else {
-            legacyRoles = RoleCode.normalizeAll(resolvedAssignments.stream()
-                    .map(assignment -> assignment.roleTemplate().legacyRoleCode())
-                    .toList());
-        }
+        List<String> roles = RoleTemplateCode.normalizeAll(resolvedAssignments.stream()
+                .map(assignment -> assignment.roleTemplate().name())
+                .toList());
 
         List<String> platformRoles = RoleTemplateCode.normalizeAll(resolvedAssignments.stream()
                 .filter(assignment -> assignment.roleTemplate().isPlatformRole())
@@ -81,7 +70,7 @@ public class UserAuthorizationService {
         }
 
         return new UserAuthorizationProfile(
-                legacyRoles,
+                roles,
                 platformRoles,
                 memberships,
                 com.example.demo.auth.model.PermissionCode.sortCodes(permissionSet),
@@ -117,43 +106,6 @@ public class UserAuthorizationService {
             return Optional.empty();
         }
         return Optional.of(new ResolvedAssignment(roleTemplate, scopeType, assignment.getEnterpriseId(), assignment.getFleetId()));
-    }
-
-    private List<ResolvedAssignment> deriveLegacyAssignments(UserAccount user, List<String> legacyRoles) {
-        Map<String, ResolvedAssignment> deduplicated = new LinkedHashMap<>();
-        for (String legacyRole : legacyRoles) {
-            RoleTemplateCode template = mapLegacyRole(legacyRole).orElse(null);
-            if (template == null) {
-                continue;
-            }
-            ResolvedAssignment assignment;
-            if (template.isPlatformRole()) {
-                assignment = new ResolvedAssignment(template, ScopeType.PLATFORM, null, null);
-            } else {
-                if (user.getEnterpriseId() == null) {
-                    continue;
-                }
-                assignment = new ResolvedAssignment(template, ScopeType.ENTERPRISE, user.getEnterpriseId(), null);
-            }
-            deduplicated.putIfAbsent(keyOf(assignment), assignment);
-        }
-        return List.copyOf(deduplicated.values());
-    }
-
-    private Optional<RoleTemplateCode> mapLegacyRole(String legacyRole) {
-        RoleCode roleCode = RoleCode.from(legacyRole).orElse(null);
-        if (roleCode == null) {
-            return Optional.empty();
-        }
-        return Optional.of(switch (roleCode) {
-            case SUPER_ADMIN -> RoleTemplateCode.PLATFORM_SUPER_ADMIN;
-            case SYS_ADMIN -> RoleTemplateCode.PLATFORM_SYS_ADMIN;
-            case RISK_ADMIN -> RoleTemplateCode.PLATFORM_RISK_ADMIN;
-            case ENTERPRISE_ADMIN -> RoleTemplateCode.ORG_ADMIN;
-            case OPERATOR -> RoleTemplateCode.ORG_OPERATOR;
-            case ANALYST -> RoleTemplateCode.ORG_ANALYST;
-            case VIEWER -> RoleTemplateCode.ORG_VIEWER;
-        });
     }
 
     private AccessScopeData resolveDefaultScope(List<String> platformRoles, List<AccessMembership> memberships) {
