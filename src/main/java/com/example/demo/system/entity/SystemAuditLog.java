@@ -18,7 +18,7 @@ public class SystemAuditLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "operator_id", nullable = false)
+    @Column(name = "operator_id")
     private Long operatorId;
 
     @Column(name = "operator_name", nullable = false, length = 64)
@@ -43,7 +43,7 @@ public class SystemAuditLog {
     @Column(name = "action_type", nullable = false, length = 64)
     private String actionType;
 
-    @Column(name = "action_by", nullable = false)
+    @Column(name = "action_by")
     private Long actionBy;
 
     @Column(name = "action_time", nullable = false)
@@ -214,4 +214,3 @@ public class SystemAuditLog {
         this.createdAt = createdAt;
     }
 }
-

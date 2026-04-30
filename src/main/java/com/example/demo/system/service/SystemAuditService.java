@@ -60,7 +60,7 @@ public class SystemAuditService {
         String traceId = TraceIdContext.getTraceId();
 
         SystemAuditLog auditLog = new SystemAuditLog();
-        auditLog.setOperatorId(operator == null ? 0L : operator.getUserId());
+        auditLog.setOperatorId(operator == null ? null : operator.getUserId());
         auditLog.setOperatorName(operator == null ? "system" : operator.getUsername());
         auditLog.setModule(normalize(module, "SYSTEM"));
         auditLog.setAction(normalize(actionType, "UNKNOWN"));
@@ -68,7 +68,7 @@ public class SystemAuditService {
         auditLog.setDetailJson(toJson(detail));
         auditLog.setIp(request == null ? null : request.getRemoteAddr());
         auditLog.setActionType(normalize(actionType, "UNKNOWN"));
-        auditLog.setActionBy(operator == null ? 0L : operator.getUserId());
+        auditLog.setActionBy(operator == null ? null : operator.getUserId());
         auditLog.setActionTime(now);
         auditLog.setActionTargetType(normalize(targetType, "UNKNOWN"));
         auditLog.setActionTargetId(normalize(targetId, null));
