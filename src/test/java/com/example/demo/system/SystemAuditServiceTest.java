@@ -5,7 +5,6 @@ import com.example.demo.system.entity.SystemAuditLog;
 import com.example.demo.system.repository.SystemAuditRepository;
 import com.example.demo.system.service.SystemAuditService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
