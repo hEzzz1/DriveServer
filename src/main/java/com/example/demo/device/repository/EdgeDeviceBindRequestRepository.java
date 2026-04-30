@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.Collection;
 import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 public interface EdgeDeviceBindRequestRepository extends JpaRepository<EdgeDeviceBindRequest, Long>, JpaSpecificationExecutor<EdgeDeviceBindRequest> {
@@ -14,4 +15,6 @@ public interface EdgeDeviceBindRequestRepository extends JpaRepository<EdgeDevic
     Optional<EdgeDeviceBindRequest> findTopByDeviceIdAndStatusOrderByCreatedAtDesc(Long deviceId, String status);
 
     List<EdgeDeviceBindRequest> findByDeviceIdInOrderByDeviceIdAscCreatedAtDesc(Collection<Long> deviceIds);
+
+    List<EdgeDeviceBindRequest> findByStatusAndExpiresAtBefore(String status, LocalDateTime expiresAt);
 }

@@ -157,6 +157,7 @@ public class EdgeDeviceBindRequestService {
     public EdgeDeviceBindRequestPageResponseData list(AuthenticatedUser operator, Integer page, Integer size, Long enterpriseId, String status, String deviceCode) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
+        expirePendingRequestsForList(status);
         Long readableEnterpriseId = businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
         Specification<EdgeDeviceBindRequest> specification = buildSpecification(readableEnterpriseId, normalizeOptional(status), normalizeOptional(deviceCode));
         Page<EdgeDeviceBindRequest> result = edgeDeviceBindRequestRepository.findAll(
@@ -206,7 +207,21 @@ public class EdgeDeviceBindRequestService {
         systemAuditService.record(operator, "EDGE_DEVICE_BIND_REQUEST", "APPROVE_EDGE_DEVICE_BIND_REQUEST",
                 "EDGE_DEVICE_BIND_REQUEST", String.valueOf(saved.getId()), "SUCCESS", "审批通过设备企业绑定申请",
                 auditDetail(operator, saved, device));
-        return toResponse(saved, device, false);
+                return toResponse(saved, device, false);
+    }
+
+    private void expirePendingRequestsForList(String status) {
+        if (StringUtils.hasText(status)
+                && !EdgeDeviceBindRequestStatus.PENDING.name().equals(status)
+                && !EdgeDeviceBindRequestStatus.EXPIRED.name().equals(status)) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        for (EdgeDeviceBindRequest bindRequest : edgeDeviceBindRequestRepository.findByStatusAndExpiresAtBefore(
+                EdgeDeviceBindRequestStatus.PENDING.name(), now)) {
+            Device device = deviceService.requireDevice(bindRequest.getDeviceId());
+            deviceService.refreshBindRequestIfExpired(device, bindRequest);
+        }
     }
 
     @Transactional
