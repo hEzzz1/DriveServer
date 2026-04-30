@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/devices")
+@RequestMapping({"/api/v1/devices", "/api/v1/org/devices"})
 public class DeviceController {
 
     private final DeviceService deviceService;

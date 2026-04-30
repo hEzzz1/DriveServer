@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.OffsetDateTime;
 
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping({"/api/v1", "/api/v1/platform"})
 public class SystemController {
 
     private final SystemManagementService systemManagementService;
@@ -65,7 +65,7 @@ public class SystemController {
         return ApiResponse.success(systemManagementService.getSummary());
     }
 
-    @GetMapping("/audits")
+    @GetMapping({"/audits", "/audit"})
     @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'audit.read')")
     public ApiResponse<SystemAuditPageResponseData> audits(@RequestParam(required = false) String module,
                                                            @RequestParam(required = false) String actionType,
@@ -79,13 +79,13 @@ public class SystemController {
         return ApiResponse.success(systemAuditService.list(module, actionType, targetType, targetId, actionBy, startTime, endTime, page, size));
     }
 
-    @GetMapping("/audits/{id}")
+    @GetMapping({"/audits/{id}", "/audit/{id}"})
     @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'audit.read')")
     public ApiResponse<SystemAuditDetailData> auditDetail(@PathVariable Long id) {
         return ApiResponse.success(systemAuditService.getDetail(id));
     }
 
-    @GetMapping("/audits/export")
+    @GetMapping({"/audits/export", "/audit/export"})
     @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'audit.export')")
     public ApiResponse<SystemAuditExportResponseData> exportAudits(@RequestParam(required = false) String module,
                                                                    @RequestParam(required = false) String actionType,

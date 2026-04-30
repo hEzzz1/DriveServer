@@ -2,15 +2,11 @@ package com.example.demo.enterprise.controller;
 
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.common.api.ApiResponse;
-import com.example.demo.enterprise.dto.EnterpriseActivationCodeResponseData;
 import com.example.demo.enterprise.dto.CreateEnterpriseRequest;
 import com.example.demo.enterprise.dto.EnterpriseDetailResponseData;
-import com.example.demo.enterprise.dto.EnterpriseDeviceBindLogPageResponseData;
 import com.example.demo.enterprise.dto.EnterprisePageResponseData;
 import com.example.demo.enterprise.dto.UpdateEnterpriseRequest;
 import com.example.demo.enterprise.dto.UpdateEnterpriseStatusRequest;
-import com.example.demo.device.service.EnterpriseDeviceBindLogService;
-import com.example.demo.enterprise.service.EnterpriseActivationCodeService;
 import com.example.demo.enterprise.service.EnterpriseManagementService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,19 +21,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/enterprises")
+@RequestMapping("/api/v1/platform/enterprises")
 public class EnterpriseController {
 
     private final EnterpriseManagementService enterpriseManagementService;
-    private final EnterpriseActivationCodeService enterpriseActivationCodeService;
-    private final EnterpriseDeviceBindLogService enterpriseDeviceBindLogService;
 
-    public EnterpriseController(EnterpriseManagementService enterpriseManagementService,
-                                EnterpriseActivationCodeService enterpriseActivationCodeService,
-                                EnterpriseDeviceBindLogService enterpriseDeviceBindLogService) {
+    public EnterpriseController(EnterpriseManagementService enterpriseManagementService) {
         this.enterpriseManagementService = enterpriseManagementService;
-        this.enterpriseActivationCodeService = enterpriseActivationCodeService;
-        this.enterpriseDeviceBindLogService = enterpriseDeviceBindLogService;
     }
 
     @GetMapping
@@ -54,33 +44,6 @@ public class EnterpriseController {
     @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'enterprise.read')")
     public ApiResponse<EnterpriseDetailResponseData> getEnterprise(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(enterpriseManagementService.getEnterprise(currentUser(authentication), id));
-    }
-
-    @GetMapping("/{id}/activation-code")
-    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'activation_code.read')")
-    public ApiResponse<EnterpriseActivationCodeResponseData> getActivationCode(@PathVariable Long id, Authentication authentication) {
-        return ApiResponse.success(enterpriseActivationCodeService.getActivationCode(currentUser(authentication), id));
-    }
-
-    @PostMapping("/{id}/activation-code/rotate")
-    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'activation_code.manage')")
-    public ApiResponse<EnterpriseActivationCodeResponseData> rotateActivationCode(@PathVariable Long id, Authentication authentication) {
-        return ApiResponse.success(enterpriseActivationCodeService.rotateActivationCode(currentUser(authentication), id));
-    }
-
-    @PostMapping("/{id}/activation-code/disable")
-    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'activation_code.manage')")
-    public ApiResponse<EnterpriseActivationCodeResponseData> disableActivationCode(@PathVariable Long id, Authentication authentication) {
-        return ApiResponse.success(enterpriseActivationCodeService.disableActivationCode(currentUser(authentication), id));
-    }
-
-    @GetMapping("/{id}/device-bind-logs")
-    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'activation_code.read')")
-    public ApiResponse<EnterpriseDeviceBindLogPageResponseData> getDeviceBindLogs(@PathVariable Long id,
-                                                                                  @RequestParam(required = false) Integer page,
-                                                                                  @RequestParam(required = false) Integer size,
-                                                                                  Authentication authentication) {
-        return ApiResponse.success(enterpriseDeviceBindLogService.list(currentUser(authentication), id, page, size));
     }
 
     @PostMapping

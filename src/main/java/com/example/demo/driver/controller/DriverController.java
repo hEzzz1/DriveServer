@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/drivers")
+@RequestMapping({"/api/v1/drivers", "/api/v1/org/drivers"})
 public class DriverController {
 
     private final DriverManagementService driverManagementService;

@@ -26,6 +26,7 @@ public record BusinessDataScope(
         return new BusinessDataScope(false, Set.of(), Map.of());
     }
 
+    // Reserved for platform metadata queries. Do not use this scope for enterprise business data access.
     public static BusinessDataScope globalScope() {
         return new BusinessDataScope(true, Set.of(), Map.of());
     }

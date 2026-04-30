@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/rules")
+@RequestMapping({"/api/v1/rules", "/api/v1/platform/rules"})
 public class RuleController {
 
     private final RuleConfigService ruleConfigService;

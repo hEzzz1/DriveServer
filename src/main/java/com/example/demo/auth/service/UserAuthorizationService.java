@@ -126,10 +126,6 @@ public class UserAuthorizationService {
     }
 
     private BusinessDataScope resolveDataScope(List<ResolvedAssignment> assignments) {
-        if (assignments.stream().anyMatch(assignment -> assignment.scopeType() == ScopeType.PLATFORM)) {
-            return BusinessDataScope.globalScope();
-        }
-
         Set<Long> enterpriseIds = new LinkedHashSet<>();
         Map<Long, Long> fleetEnterpriseIds = new LinkedHashMap<>();
         for (ResolvedAssignment assignment : assignments) {

@@ -111,13 +111,13 @@ class UserManagementIntegrationTest {
     void superAdminCanListAllUsersAndFilterByEnterprise() throws Exception {
         String token = loginAndGetToken("super-admin", "123456");
 
-        mockMvc.perform(get("/api/v1/users")
+        mockMvc.perform(get("/api/v1/platform/enterprise-admins")
                         .header("Authorization", "Bearer " + token)
                         .param("enterpriseId", String.valueOf(enterpriseA.getId())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.items[0].enterpriseId").value(enterpriseA.getId()))
-                .andExpect(jsonPath("$.data.items[1].enterpriseId").value(enterpriseA.getId()));
+                .andExpect(jsonPath("$.data.items[0].roles[0]").value("ORG_ADMIN"));
     }
 
     @Test
@@ -231,10 +231,10 @@ class UserManagementIntegrationTest {
     @Test
     void disabledUserTokenShouldBecomeInvalidOnNextRequest() throws Exception {
         String viewerToken = loginAndGetToken("viewer-a", "123456");
-        String superAdminToken = loginAndGetToken("super-admin", "123456");
+        String enterpriseAdminToken = loginAndGetToken("enterprise-admin-a", "123456");
 
         mockMvc.perform(put("/api/v1/users/{id}/status", enterpriseViewerAUser.getId())
-                        .header("Authorization", "Bearer " + superAdminToken)
+                        .header("Authorization", "Bearer " + enterpriseAdminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

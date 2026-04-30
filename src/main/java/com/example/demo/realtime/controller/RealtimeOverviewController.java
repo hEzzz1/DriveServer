@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/realtime")
+@RequestMapping({"/api/v1/realtime", "/api/v1/org"})
 public class RealtimeOverviewController {
 
     private final StatsService statsService;

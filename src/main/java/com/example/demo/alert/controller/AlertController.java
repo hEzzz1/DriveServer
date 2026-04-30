@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.OffsetDateTime;
 
 @RestController
-@RequestMapping("/api/v1/alerts")
+@RequestMapping({"/api/v1/alerts", "/api/v1/org/alerts"})
 public class AlertController {
 
     private final AlertService alertService;

@@ -479,13 +479,10 @@ public class DeviceService {
     }
 
     private void assertCanAccessDevice(AuthenticatedUser operator, Device device) {
-        if (device.getEnterpriseId() != null) {
-            businessAccessService.assertCanAccessData(operator, device.getEnterpriseId(), device.getFleetId());
-            return;
-        }
-        if (!businessAccessService.isPlatformScoped(operator)) {
+        if (device.getEnterpriseId() == null) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
+        businessAccessService.assertCanAccessData(operator, device.getEnterpriseId(), device.getFleetId());
     }
 
     private BindingResolution resolveBindingForCreate(AuthenticatedUser operator, Long enterpriseId, Long fleetId, Long vehicleId) {
@@ -514,10 +511,7 @@ public class DeviceService {
             businessAccessService.assertCanManageEnterprise(operator, enterprise.getId());
             return new BindingResolution(enterprise.getId(), null, null);
         }
-        if (!businessAccessService.isPlatformScoped(operator)) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
-        }
-        return new BindingResolution(null, null, null);
+        throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId、fleetId、vehicleId至少提供一个");
     }
 
     private void validateVehicleAvailability(Long vehicleId, Long currentDeviceId) {

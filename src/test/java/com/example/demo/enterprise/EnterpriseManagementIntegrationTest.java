@@ -97,7 +97,7 @@ class EnterpriseManagementIntegrationTest {
     void superAdminShouldManageEnterprises() throws Exception {
         String token = loginAndGetToken("super-admin", "123456");
 
-        mockMvc.perform(post("/api/v1/enterprises")
+        mockMvc.perform(post("/api/v1/platform/enterprises")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -111,7 +111,7 @@ class EnterpriseManagementIntegrationTest {
                 .andExpect(jsonPath("$.data.code").value("ENT-C"))
                 .andExpect(jsonPath("$.data.name").value("企业C"));
 
-        mockMvc.perform(put("/api/v1/enterprises/{id}/status", enterpriseB.getId())
+        mockMvc.perform(put("/api/v1/platform/enterprises/{id}/status", enterpriseB.getId())
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -127,12 +127,12 @@ class EnterpriseManagementIntegrationTest {
     void sysAdminShouldNotParticipateEnterpriseMasterData() throws Exception {
         String token = loginAndGetToken("sys-admin", "123456");
 
-        mockMvc.perform(get("/api/v1/enterprises")
+        mockMvc.perform(get("/api/v1/platform/enterprises")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(40301));
 
-        mockMvc.perform(post("/api/v1/enterprises")
+        mockMvc.perform(post("/api/v1/platform/enterprises")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -146,16 +146,16 @@ class EnterpriseManagementIntegrationTest {
     }
 
     @Test
-    void enterpriseAdminShouldOnlyReadOwnEnterprise() throws Exception {
+    void enterpriseAdminShouldReadOwnEnterpriseProfileAndBeBlockedFromPlatformEnterpriseApis() throws Exception {
         String token = loginAndGetToken("enterprise-admin", "123456");
 
-        mockMvc.perform(get("/api/v1/enterprises")
+        mockMvc.perform(get("/api/v1/org/enterprise-profile")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(1))
-                .andExpect(jsonPath("$.data.items[0].id").value(enterpriseA.getId()));
+                .andExpect(jsonPath("$.data.id").value(enterpriseA.getId()))
+                .andExpect(jsonPath("$.data.code").value("ENT-A"));
 
-        mockMvc.perform(get("/api/v1/enterprises/{id}", enterpriseB.getId())
+        mockMvc.perform(get("/api/v1/platform/enterprises/{id}", enterpriseB.getId())
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(40301));

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.OffsetDateTime;
 
 @RestController
-@RequestMapping("/api/v1/stats")
+@RequestMapping({"/api/v1/stats", "/api/v1/org/stats"})
 public class StatsController {
 
     private final StatsService statsService;

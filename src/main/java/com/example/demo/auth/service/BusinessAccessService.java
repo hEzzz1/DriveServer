@@ -33,8 +33,8 @@ public class BusinessAccessService {
     }
 
     public Long resolveReadableEnterpriseId(AuthenticatedUser operator, Long requestedEnterpriseId) {
-        if (isPlatformScoped(operator)) {
-            return requestedEnterpriseId;
+        if (isPlatformAdmin(operator)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
         BusinessDataScope scope = getAuthorizationProfile(operator).dataScope();
         if (requestedEnterpriseId != null) {
@@ -53,6 +53,9 @@ public class BusinessAccessService {
         if (targetEnterpriseId == null) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId不能为空");
         }
+        if (isPlatformAdmin(operator)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
         if (getAuthorizationProfile(operator).dataScope().canAccessEnterpriseResource(targetEnterpriseId)) {
             return;
         }
@@ -60,18 +63,27 @@ public class BusinessAccessService {
     }
 
     public void assertCanAccessEnterprise(AuthenticatedUser operator, Long enterpriseId) {
+        if (isPlatformAdmin(operator)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
         if (enterpriseId == null || !getAuthorizationProfile(operator).dataScope().canAccessEnterpriseResource(enterpriseId)) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
     }
 
     public void assertCanAccessData(AuthenticatedUser operator, Long enterpriseId, Long fleetId) {
+        if (isPlatformAdmin(operator)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
         if (!getAuthorizationProfile(operator).dataScope().canAccessData(enterpriseId, fleetId)) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
         }
     }
 
     public BusinessDataScope resolveDataScope(AuthenticatedUser operator, Long requestedEnterpriseId, Long requestedFleetId) {
+        if (isPlatformAdmin(operator)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
         BusinessDataScope scope = getAuthorizationProfile(operator).dataScope();
         if (scope.isEmpty()) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
@@ -107,12 +119,18 @@ public class BusinessAccessService {
         return currentUser.getEnterpriseId();
     }
 
+    public void assertPlatformAdmin(AuthenticatedUser operator) {
+        if (!isPlatformAdmin(operator)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
+    }
+
     public boolean isSuperAdmin(AuthenticatedUser operator) {
         return getAuthorizationProfile(operator).hasPlatformRole(com.example.demo.auth.model.RoleTemplateCode.PLATFORM_SUPER_ADMIN.name());
     }
 
-    public boolean isPlatformScoped(AuthenticatedUser operator) {
-        return getAuthorizationProfile(operator).dataScope().platformWide();
+    public boolean isPlatformAdmin(AuthenticatedUser operator) {
+        return !getAuthorizationProfile(operator).platformRoles().isEmpty();
     }
 
     public boolean hasPermission(AuthenticatedUser operator, String permission) {

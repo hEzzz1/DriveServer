@@ -56,13 +56,13 @@ public class EnterpriseManagementService {
                                                       Integer size,
                                                       String keyword,
                                                       Byte status) {
+        businessAccessService.assertPlatformAdmin(operator);
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
-        BusinessDataScope dataScope = businessAccessService.resolveDataScope(operator, null, null);
         Specification<Enterprise> specification = buildSpecification(
                 keyword,
                 normalizeStatus(status, true),
-                dataScope);
+                BusinessDataScope.globalScope());
         Page<Enterprise> result = enterpriseRepository.findAll(
                 specification,
                 PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
@@ -76,8 +76,8 @@ public class EnterpriseManagementService {
 
     @Transactional(readOnly = true)
     public EnterpriseDetailResponseData getEnterprise(AuthenticatedUser operator, Long enterpriseId) {
+        businessAccessService.assertPlatformAdmin(operator);
         Enterprise enterprise = getEnterpriseEntity(enterpriseId);
-        businessAccessService.assertCanAccessEnterprise(operator, enterprise.getId());
         return toDetail(enterprise);
     }
 
@@ -161,9 +161,7 @@ public class EnterpriseManagementService {
     }
 
     private void assertPlatformScope(AuthenticatedUser operator) {
-        if (!businessAccessService.isPlatformScoped(operator)) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
-        }
+        businessAccessService.assertPlatformAdmin(operator);
     }
 
     private EnterpriseListItemData toListItem(Enterprise enterprise) {

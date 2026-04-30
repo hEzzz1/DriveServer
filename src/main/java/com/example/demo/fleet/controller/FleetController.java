@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/fleets")
+@RequestMapping({"/api/v1/fleets", "/api/v1/org/fleets"})
 public class FleetController {
 
     private final FleetManagementService fleetManagementService;
