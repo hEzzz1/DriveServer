@@ -15,17 +15,22 @@ import com.example.demo.device.dto.ReassignDeviceVehicleRequest;
 import com.example.demo.device.dto.RotateDeviceTokenResponseData;
 import com.example.demo.device.dto.UpdateDeviceRequest;
 import com.example.demo.device.entity.Device;
+import com.example.demo.device.entity.EdgeDeviceBindRequest;
+import com.example.demo.device.model.EdgeDeviceBindRequestStatus;
+import com.example.demo.device.model.EdgeDeviceBindStatus;
+import com.example.demo.device.model.EdgeDeviceStatus;
 import com.example.demo.device.repository.DeviceRepository;
+import com.example.demo.device.repository.EdgeDeviceBindRequestRepository;
+import com.example.demo.driver.entity.Driver;
+import com.example.demo.driver.repository.DriverRepository;
 import com.example.demo.enterprise.entity.Enterprise;
 import com.example.demo.enterprise.repository.EnterpriseRepository;
 import com.example.demo.fleet.entity.Fleet;
 import com.example.demo.fleet.repository.FleetRepository;
 import com.example.demo.rule.service.EdgeConfigVersionResolver;
-import com.example.demo.driver.entity.Driver;
-import com.example.demo.driver.repository.DriverRepository;
 import com.example.demo.session.entity.DrivingSession;
-import com.example.demo.session.repository.DrivingSessionRepository;
 import com.example.demo.session.model.SessionStatus;
+import com.example.demo.session.repository.DrivingSessionRepository;
 import com.example.demo.system.service.SystemAuditService;
 import com.example.demo.vehicle.entity.Vehicle;
 import com.example.demo.vehicle.repository.VehicleRepository;
@@ -61,6 +66,7 @@ public class DeviceService {
     private final EnterpriseRepository enterpriseRepository;
     private final FleetRepository fleetRepository;
     private final DriverRepository driverRepository;
+    private final EdgeDeviceBindRequestRepository edgeDeviceBindRequestRepository;
     private final BusinessAccessService businessAccessService;
     private final SystemAuditService systemAuditService;
     private final EdgeConfigVersionResolver edgeConfigVersionResolver;
@@ -71,6 +77,7 @@ public class DeviceService {
                          EnterpriseRepository enterpriseRepository,
                          FleetRepository fleetRepository,
                          DriverRepository driverRepository,
+                         EdgeDeviceBindRequestRepository edgeDeviceBindRequestRepository,
                          BusinessAccessService businessAccessService,
                          SystemAuditService systemAuditService,
                          EdgeConfigVersionResolver edgeConfigVersionResolver) {
@@ -80,6 +87,7 @@ public class DeviceService {
         this.enterpriseRepository = enterpriseRepository;
         this.fleetRepository = fleetRepository;
         this.driverRepository = driverRepository;
+        this.edgeDeviceBindRequestRepository = edgeDeviceBindRequestRepository;
         this.businessAccessService = businessAccessService;
         this.systemAuditService = systemAuditService;
         this.edgeConfigVersionResolver = edgeConfigVersionResolver;
@@ -89,7 +97,10 @@ public class DeviceService {
     public DevicePageResponseData listDevices(AuthenticatedUser operator, Integer page, Integer size, Long enterpriseId, Long fleetId, Long vehicleId) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
-        Long readableEnterpriseId = businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
+        Long readableEnterpriseId = enterpriseId == null ? null : businessAccessService.resolveReadableEnterpriseId(operator, enterpriseId);
+        if (readableEnterpriseId == null && !businessAccessService.isSuperAdmin(operator)) {
+            readableEnterpriseId = businessAccessService.requireOperatorEnterpriseId(operator);
+        }
         Specification<Device> specification = buildSpecification(readableEnterpriseId, fleetId, vehicleId);
         Page<Device> result = deviceRepository.findAll(specification, PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.ASC, "id")));
         DeviceViewRefs refs = loadDeviceViewRefs(result.getContent());
@@ -100,28 +111,27 @@ public class DeviceService {
     @Transactional(readOnly = true)
     public DeviceDetailResponseData getDevice(AuthenticatedUser operator, Long deviceId) {
         Device device = getDeviceEntity(deviceId);
-        businessAccessService.resolveReadableEnterpriseId(operator, device.getEnterpriseId());
+        assertCanAccessDevice(operator, device);
         return toDetail(device, loadDeviceViewRefs(List.of(device)));
     }
 
     @Transactional
     public DeviceDetailResponseData createDevice(AuthenticatedUser operator, CreateDeviceRequest request) {
-        Vehicle vehicle = getVehicleEntity(request.vehicleId());
-        businessAccessService.assertCanManageEnterprise(operator, vehicle.getEnterpriseId());
         String deviceCode = normalizeRequired(request.deviceCode(), "deviceCode不能为空");
         if (deviceRepository.existsByDeviceCode(deviceCode)) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "deviceCode已存在");
         }
 
+        BindingResolution resolution = resolveBindingForCreate(operator, request.enterpriseId(), request.fleetId(), request.vehicleId());
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         Device device = new Device();
-        device.setEnterpriseId(vehicle.getEnterpriseId());
-        device.setFleetId(vehicle.getFleetId());
-        device.setVehicleId(vehicle.getId());
+        device.setEnterpriseId(resolution.enterpriseId());
+        device.setFleetId(resolution.fleetId());
+        device.setVehicleId(resolution.vehicleId());
         device.setDeviceCode(deviceCode);
         device.setDeviceName(normalizeRequired(request.deviceName(), "deviceName不能为空"));
         device.setActivationCode(normalizeOptional(request.activationCode()));
-        device.setStatus((byte) 1);
+        device.setStatus(EdgeDeviceStatus.NEW.name());
         device.setRemark(normalizeOptional(request.remark()));
         device.setCreatedAt(now);
         device.setUpdatedAt(now);
@@ -134,7 +144,7 @@ public class DeviceService {
     @Transactional
     public DeviceDetailResponseData updateDevice(AuthenticatedUser operator, Long deviceId, UpdateDeviceRequest request) {
         Device device = getDeviceEntity(deviceId);
-        businessAccessService.assertCanManageEnterprise(operator, device.getEnterpriseId());
+        assertCanAccessDevice(operator, device);
         Map<String, Object> before = snapshot(device);
         device.setDeviceName(normalizeRequired(request.deviceName(), "deviceName不能为空"));
         device.setActivationCode(normalizeOptional(request.activationCode()));
@@ -148,9 +158,9 @@ public class DeviceService {
     @Transactional
     public DeviceDetailResponseData updateStatus(AuthenticatedUser operator, Long deviceId, Byte status) {
         Device device = getDeviceEntity(deviceId);
-        businessAccessService.assertCanManageEnterprise(operator, device.getEnterpriseId());
+        assertCanAccessDevice(operator, device);
         Map<String, Object> before = snapshot(device);
-        device.setStatus(normalizeStatus(status));
+        device.setStatus(normalizeStatus(status, device));
         Device saved = deviceRepository.save(device);
         systemAuditService.record(operator, "DEVICE", "UPDATE_DEVICE_STATUS", "DEVICE", String.valueOf(saved.getId()),
                 "SUCCESS", "更新设备状态", auditDetail(operator, saved, before, snapshot(saved)));
@@ -160,14 +170,20 @@ public class DeviceService {
     @Transactional
     public DeviceDetailResponseData reassignVehicle(AuthenticatedUser operator, Long deviceId, ReassignDeviceVehicleRequest request) {
         Device device = getDeviceEntity(deviceId);
-        businessAccessService.assertCanManageEnterprise(operator, device.getEnterpriseId());
+        assertCanAccessDevice(operator, device);
         Vehicle vehicle = getVehicleEntity(request.vehicleId());
+        if (device.getEnterpriseId() == null) {
+            throw new BusinessException(ApiCode.DEVICE_NOT_BOUND_ENTERPRISE, ApiCode.DEVICE_NOT_BOUND_ENTERPRISE.getMessage());
+        }
         if (!vehicle.getEnterpriseId().equals(device.getEnterpriseId())) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "vehicleId不属于当前enterprise");
         }
         Map<String, Object> before = snapshot(device);
         device.setFleetId(vehicle.getFleetId());
         device.setVehicleId(vehicle.getId());
+        if (!EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
+            device.setStatus(EdgeDeviceStatus.VEHICLE_BOUND.name());
+        }
         Device saved = deviceRepository.save(device);
         systemAuditService.record(operator, "DEVICE", "REASSIGN_DEVICE_VEHICLE", "DEVICE", String.valueOf(saved.getId()),
                 "SUCCESS", "调整设备绑定车辆", auditDetail(operator, saved, before, snapshot(saved)));
@@ -177,7 +193,7 @@ public class DeviceService {
     @Transactional
     public RotateDeviceTokenResponseData rotateToken(AuthenticatedUser operator, Long deviceId) {
         Device device = getDeviceEntity(deviceId);
-        businessAccessService.assertCanManageEnterprise(operator, device.getEnterpriseId());
+        assertCanAccessDevice(operator, device);
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         device.setDeviceToken(generateSecretToken());
         device.setTokenRotatedAt(now);
@@ -191,7 +207,7 @@ public class DeviceService {
     public DeviceActivateResponseData activate(DeviceActivateRequest request) {
         Device device = deviceRepository.findByDeviceCode(normalizeRequired(request.deviceCode(), "deviceCode不能为空"))
                 .orElseThrow(() -> new BusinessException(ApiCode.NOT_FOUND, "设备不存在"));
-        if (device.getStatus() == null || device.getStatus() == (byte) 0) {
+        if (EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
             throw new BusinessException(ApiCode.FORBIDDEN, "设备已禁用");
         }
         if (!StringUtils.hasText(device.getActivationCode()) || !device.getActivationCode().equals(request.activationCode().trim())) {
@@ -201,6 +217,11 @@ public class DeviceService {
         device.setDeviceToken(generateSecretToken());
         device.setLastActivatedAt(now);
         device.setTokenRotatedAt(now);
+        if (device.getEnterpriseId() == null) {
+            device.setStatus(EdgeDeviceStatus.ACTIVATED.name());
+        } else if (!EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
+            device.setStatus(deriveBoundStatus(device).name());
+        }
         deviceRepository.save(device);
         systemAuditService.record(null, "DEVICE", "DEVICE_ACTIVATE", "DEVICE", String.valueOf(device.getId()),
                 "SUCCESS", "设备激活", Map.of("deviceId", device.getId(), "deviceCode", device.getDeviceCode()));
@@ -211,15 +232,20 @@ public class DeviceService {
     @Transactional
     public DeviceContextResponseData getContext(String deviceCode, String deviceToken) {
         Device device = authenticateAndTouch(deviceCode, deviceToken).device();
+        String currentRequestStatus = currentBindRequestStatus(device);
+        assertEnterpriseBoundOrThrow(device, currentRequestStatus);
         Enterprise enterprise = enterpriseRepository.findById(device.getEnterpriseId()).orElse(null);
-        Fleet fleet = fleetRepository.findById(device.getFleetId()).orElse(null);
-        Vehicle vehicle = vehicleRepository.findById(device.getVehicleId()).orElse(null);
+        Fleet fleet = device.getFleetId() == null ? null : fleetRepository.findById(device.getFleetId()).orElse(null);
+        Vehicle vehicle = device.getVehicleId() == null ? null : vehicleRepository.findById(device.getVehicleId()).orElse(null);
         DrivingSession session = drivingSessionRepository.findFirstByDeviceIdAndStatusOrderBySignInTimeDesc(device.getId(), SessionStatus.ACTIVE.getCode()).orElse(null);
         Driver driver = session == null ? null : driverRepository.findById(session.getDriverId()).orElse(null);
         return new DeviceContextResponseData(
                 device.getId(),
                 device.getDeviceCode(),
                 device.getDeviceName(),
+                device.getStatus(),
+                resolveBindStatus(device, currentRequestStatus).name(),
+                currentRequestStatus,
                 device.getEnterpriseId(),
                 enterprise == null ? null : enterprise.getName(),
                 device.getFleetId(),
@@ -248,13 +274,78 @@ public class DeviceService {
         return new DeviceAuthContext(device);
     }
 
+    @Transactional(readOnly = true)
+    public Device requireDevice(Long deviceId) {
+        return getDeviceEntity(deviceId);
+    }
+
+    @Transactional
+    public void ensureReadyForSignIn(Device device) {
+        if (device.getLastActivatedAt() == null) {
+            throw new BusinessException(ApiCode.DEVICE_NOT_ACTIVATED, ApiCode.DEVICE_NOT_ACTIVATED.getMessage());
+        }
+        String currentRequestStatus = currentBindRequestStatus(device);
+        assertEnterpriseBoundOrThrow(device, currentRequestStatus);
+        if (device.getVehicleId() == null) {
+            throw new BusinessException(ApiCode.DEVICE_NOT_BOUND_VEHICLE, ApiCode.DEVICE_NOT_BOUND_VEHICLE.getMessage());
+        }
+    }
+
+    @Transactional
+    public void syncDeviceStatusAfterBindRequestChange(Device device) {
+        if (EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
+            return;
+        }
+        String requestStatus = currentBindRequestStatus(device);
+        if (device.getEnterpriseId() == null && EdgeDeviceBindRequestStatus.PENDING.name().equals(requestStatus)) {
+            device.setStatus(EdgeDeviceStatus.PENDING_ENTERPRISE_APPROVAL.name());
+        } else if (device.getEnterpriseId() != null) {
+            device.setStatus(deriveBoundStatus(device).name());
+        } else if (device.getLastActivatedAt() != null) {
+            device.setStatus(EdgeDeviceStatus.ACTIVATED.name());
+        } else {
+            device.setStatus(EdgeDeviceStatus.NEW.name());
+        }
+        deviceRepository.save(device);
+    }
+
+    @Transactional
+    public String currentBindRequestStatus(Device device) {
+        EdgeDeviceBindRequest request = edgeDeviceBindRequestRepository.findTopByDeviceIdOrderByCreatedAtDesc(device.getId()).orElse(null);
+        if (request == null) {
+            return null;
+        }
+        if (EdgeDeviceBindRequestStatus.PENDING.name().equals(request.getStatus())
+                && request.getExpiresAt() != null
+                && request.getExpiresAt().isBefore(LocalDateTime.now(ZoneOffset.UTC))) {
+            request.setStatus(EdgeDeviceBindRequestStatus.EXPIRED.name());
+            request.setUpdatedAt(LocalDateTime.now(ZoneOffset.UTC));
+            edgeDeviceBindRequestRepository.save(request);
+            syncDeviceStatusAfterBindRequestChange(device);
+        }
+        return request.getStatus();
+    }
+
+    public EdgeDeviceBindStatus resolveBindStatus(Device device, String currentRequestStatus) {
+        if (device.getEnterpriseId() != null) {
+            return EdgeDeviceBindStatus.BOUND;
+        }
+        if (EdgeDeviceBindRequestStatus.PENDING.name().equals(currentRequestStatus)) {
+            return EdgeDeviceBindStatus.PENDING;
+        }
+        if (EdgeDeviceBindRequestStatus.REJECTED.name().equals(currentRequestStatus)) {
+            return EdgeDeviceBindStatus.REJECTED;
+        }
+        return EdgeDeviceBindStatus.UNBOUND;
+    }
+
     private Device authenticateDevice(String deviceCode, String deviceToken) {
         if (!StringUtils.hasText(deviceCode) || !StringUtils.hasText(deviceToken)) {
             throw new BusinessException(ApiCode.UNAUTHORIZED, "设备认证失败");
         }
         Device device = deviceRepository.findByDeviceCodeAndDeviceToken(deviceCode.trim(), deviceToken.trim())
                 .orElseThrow(() -> new BusinessException(ApiCode.UNAUTHORIZED, "设备认证失败"));
-        if (device.getStatus() == null || device.getStatus() == (byte) 0) {
+        if (EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
             throw new BusinessException(ApiCode.FORBIDDEN, "设备已禁用");
         }
         return device;
@@ -262,7 +353,7 @@ public class DeviceService {
 
     private void touchOnlineAndActiveSession(Device device) {
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-        device.setLastOnlineAt(now);
+        device.setLastSeenAt(now);
         deviceRepository.save(device);
         drivingSessionRepository.findFirstByDeviceIdAndStatusOrderBySignInTimeDesc(device.getId(), SessionStatus.ACTIVE.getCode())
                 .ifPresent(session -> {
@@ -297,12 +388,63 @@ public class DeviceService {
                 .orElseThrow(() -> new BusinessException(ApiCode.INVALID_PARAM, "vehicleId不存在"));
     }
 
+    private Fleet getFleetEntity(Long fleetId) {
+        return fleetRepository.findById(fleetId)
+                .orElseThrow(() -> new BusinessException(ApiCode.INVALID_PARAM, "fleetId不存在"));
+    }
+
+    private Enterprise getEnterpriseEntity(Long enterpriseId) {
+        return enterpriseRepository.findById(enterpriseId)
+                .orElseThrow(() -> new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId不存在"));
+    }
+
+    private void assertCanAccessDevice(AuthenticatedUser operator, Device device) {
+        if (device.getEnterpriseId() != null) {
+            businessAccessService.assertCanManageEnterprise(operator, device.getEnterpriseId());
+            return;
+        }
+        if (!businessAccessService.isSuperAdmin(operator)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
+    }
+
+    private BindingResolution resolveBindingForCreate(AuthenticatedUser operator, Long enterpriseId, Long fleetId, Long vehicleId) {
+        if (vehicleId != null) {
+            Vehicle vehicle = getVehicleEntity(vehicleId);
+            businessAccessService.assertCanManageEnterprise(operator, vehicle.getEnterpriseId());
+            if (enterpriseId != null && !enterpriseId.equals(vehicle.getEnterpriseId())) {
+                throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId与vehicleId不匹配");
+            }
+            if (fleetId != null && !fleetId.equals(vehicle.getFleetId())) {
+                throw new BusinessException(ApiCode.INVALID_PARAM, "fleetId与vehicleId不匹配");
+            }
+            return new BindingResolution(vehicle.getEnterpriseId(), vehicle.getFleetId(), vehicle.getId());
+        }
+        if (fleetId != null) {
+            Fleet fleet = getFleetEntity(fleetId);
+            businessAccessService.assertCanManageEnterprise(operator, fleet.getEnterpriseId());
+            if (enterpriseId != null && !enterpriseId.equals(fleet.getEnterpriseId())) {
+                throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId与fleetId不匹配");
+            }
+            return new BindingResolution(fleet.getEnterpriseId(), fleet.getId(), null);
+        }
+        if (enterpriseId != null) {
+            Enterprise enterprise = getEnterpriseEntity(enterpriseId);
+            businessAccessService.assertCanManageEnterprise(operator, enterprise.getId());
+            return new BindingResolution(enterprise.getId(), null, null);
+        }
+        if (!businessAccessService.isSuperAdmin(operator)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+        }
+        return new BindingResolution(null, null, null);
+    }
+
     private DeviceListItemData toListItem(Device device, DeviceViewRefs refs) {
         DrivingSession activeSession = refs.activeSessionsByDeviceId().get(device.getId());
         Driver currentDriver = activeSession == null ? null : refs.driversById().get(activeSession.getDriverId());
         return new DeviceListItemData(device.getId(), device.getEnterpriseId(), device.getFleetId(), device.getVehicleId(),
                 device.getDeviceCode(), device.getDeviceName(), device.getActivationCode(), device.getStatus(),
-                toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getLastOnlineAt()), toOffsetDateTime(device.getTokenRotatedAt()),
+                toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getLastSeenAt()), toOffsetDateTime(device.getTokenRotatedAt()),
                 currentDriver == null ? null : currentDriver.getId(),
                 currentDriver == null ? null : currentDriver.getDriverCode(),
                 currentDriver == null ? null : currentDriver.getName(),
@@ -316,7 +458,7 @@ public class DeviceService {
         Driver currentDriver = activeSession == null ? null : refs.driversById().get(activeSession.getDriverId());
         return new DeviceDetailResponseData(device.getId(), device.getEnterpriseId(), device.getFleetId(), device.getVehicleId(),
                 device.getDeviceCode(), device.getDeviceName(), device.getActivationCode(), device.getStatus(),
-                toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getLastOnlineAt()), toOffsetDateTime(device.getTokenRotatedAt()),
+                toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getLastSeenAt()), toOffsetDateTime(device.getTokenRotatedAt()),
                 currentDriver == null ? null : currentDriver.getId(),
                 currentDriver == null ? null : currentDriver.getDriverCode(),
                 currentDriver == null ? null : currentDriver.getName(),
@@ -347,6 +489,23 @@ public class DeviceService {
         return new DeviceViewRefs(activeSessionsByDeviceId, driversById);
     }
 
+    private void assertEnterpriseBoundOrThrow(Device device, String currentRequestStatus) {
+        if (device.getEnterpriseId() != null) {
+            return;
+        }
+        if (EdgeDeviceBindRequestStatus.PENDING.name().equals(currentRequestStatus)) {
+            throw new BusinessException(ApiCode.DEVICE_BIND_PENDING, ApiCode.DEVICE_BIND_PENDING.getMessage());
+        }
+        if (EdgeDeviceBindRequestStatus.REJECTED.name().equals(currentRequestStatus)) {
+            throw new BusinessException(ApiCode.DEVICE_BIND_REJECTED, ApiCode.DEVICE_BIND_REJECTED.getMessage());
+        }
+        throw new BusinessException(ApiCode.DEVICE_NOT_BOUND_ENTERPRISE, ApiCode.DEVICE_NOT_BOUND_ENTERPRISE.getMessage());
+    }
+
+    private EdgeDeviceStatus deriveBoundStatus(Device device) {
+        return device.getVehicleId() == null ? EdgeDeviceStatus.ENTERPRISE_BOUND : EdgeDeviceStatus.VEHICLE_BOUND;
+    }
+
     private Map<String, Object> snapshot(Device device) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("id", device.getId());
@@ -356,7 +515,7 @@ public class DeviceService {
         snapshot.put("deviceCode", device.getDeviceCode());
         snapshot.put("deviceName", device.getDeviceName());
         snapshot.put("activationCode", device.getActivationCode());
-        snapshot.put("lastOnlineAt", toOffsetDateTime(device.getLastOnlineAt()));
+        snapshot.put("lastSeenAt", toOffsetDateTime(device.getLastSeenAt()));
         snapshot.put("status", device.getStatus());
         return snapshot;
     }
@@ -388,14 +547,20 @@ public class DeviceService {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
-    private Byte normalizeStatus(Byte status) {
+    private String normalizeStatus(Byte status, Device device) {
         if (status == null) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "status不能为空");
         }
-        if (status != (byte) 0 && status != (byte) 1) {
-            throw new BusinessException(ApiCode.INVALID_PARAM, "status仅支持0或1");
+        if (status == (byte) 0) {
+            return EdgeDeviceStatus.DISABLED.name();
         }
-        return status;
+        if (status == (byte) 1) {
+            if (device.getEnterpriseId() == null) {
+                return device.getLastActivatedAt() == null ? EdgeDeviceStatus.NEW.name() : EdgeDeviceStatus.ACTIVATED.name();
+            }
+            return deriveBoundStatus(device).name();
+        }
+        throw new BusinessException(ApiCode.INVALID_PARAM, "status仅支持0或1");
     }
 
     private OffsetDateTime toOffsetDateTime(LocalDateTime value) {
@@ -425,6 +590,13 @@ public class DeviceService {
     private record DeviceViewRefs(
             Map<Long, DrivingSession> activeSessionsByDeviceId,
             Map<Long, Driver> driversById
+    ) {
+    }
+
+    private record BindingResolution(
+            Long enterpriseId,
+            Long fleetId,
+            Long vehicleId
     ) {
     }
 }

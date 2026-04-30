@@ -6,6 +6,7 @@ import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.device.entity.Device;
 import com.example.demo.device.repository.DeviceRepository;
+import com.example.demo.device.service.DeviceService;
 import com.example.demo.driver.entity.Driver;
 import com.example.demo.driver.repository.DriverRepository;
 import com.example.demo.enterprise.entity.Enterprise;
@@ -47,6 +48,7 @@ class DrivingSessionServiceTest {
         EnterpriseRepository enterpriseRepository = mock(EnterpriseRepository.class);
         FleetRepository fleetRepository = mock(FleetRepository.class);
         VehicleRepository vehicleRepository = mock(VehicleRepository.class);
+        DeviceService deviceService = mock(DeviceService.class);
         BusinessAccessService businessAccessService = mock(BusinessAccessService.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
         SystemAuditService systemAuditService = mock(SystemAuditService.class);
@@ -59,6 +61,7 @@ class DrivingSessionServiceTest {
                 enterpriseRepository,
                 fleetRepository,
                 vehicleRepository,
+                deviceService,
                 businessAccessService,
                 passwordEncoder,
                 systemAuditService,
@@ -88,6 +91,7 @@ class DrivingSessionServiceTest {
         EnterpriseRepository enterpriseRepository = mock(EnterpriseRepository.class);
         FleetRepository fleetRepository = mock(FleetRepository.class);
         VehicleRepository vehicleRepository = mock(VehicleRepository.class);
+        DeviceService deviceService = mock(DeviceService.class);
         BusinessAccessService businessAccessService = mock(BusinessAccessService.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
         SystemAuditService systemAuditService = mock(SystemAuditService.class);
@@ -100,6 +104,7 @@ class DrivingSessionServiceTest {
                 enterpriseRepository,
                 fleetRepository,
                 vehicleRepository,
+                deviceService,
                 businessAccessService,
                 passwordEncoder,
                 systemAuditService,

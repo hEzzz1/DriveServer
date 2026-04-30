@@ -7,6 +7,7 @@ import com.example.demo.common.exception.BusinessException;
 import com.example.demo.device.entity.Device;
 import com.example.demo.device.repository.DeviceRepository;
 import com.example.demo.device.service.DeviceAuthContext;
+import com.example.demo.device.service.DeviceService;
 import com.example.demo.driver.entity.Driver;
 import com.example.demo.driver.repository.DriverRepository;
 import com.example.demo.enterprise.entity.Enterprise;
@@ -65,6 +66,7 @@ public class DrivingSessionService {
     private final EnterpriseRepository enterpriseRepository;
     private final FleetRepository fleetRepository;
     private final VehicleRepository vehicleRepository;
+    private final DeviceService deviceService;
     private final BusinessAccessService businessAccessService;
     private final PasswordEncoder passwordEncoder;
     private final SystemAuditService systemAuditService;
@@ -76,6 +78,7 @@ public class DrivingSessionService {
                                  EnterpriseRepository enterpriseRepository,
                                  FleetRepository fleetRepository,
                                  VehicleRepository vehicleRepository,
+                                 DeviceService deviceService,
                                  BusinessAccessService businessAccessService,
                                  PasswordEncoder passwordEncoder,
                                  SystemAuditService systemAuditService,
@@ -86,6 +89,7 @@ public class DrivingSessionService {
         this.enterpriseRepository = enterpriseRepository;
         this.fleetRepository = fleetRepository;
         this.vehicleRepository = vehicleRepository;
+        this.deviceService = deviceService;
         this.businessAccessService = businessAccessService;
         this.passwordEncoder = passwordEncoder;
         this.systemAuditService = systemAuditService;
@@ -95,6 +99,7 @@ public class DrivingSessionService {
     @Transactional(readOnly = true)
     public AvailableDriversResponseData listAvailableDrivers(DeviceAuthContext authContext) {
         Device device = authContext.device();
+        deviceService.ensureReadyForSignIn(device);
         List<AvailableDriverItemData> items = driverRepository.findAll().stream()
                 .filter(driver -> driver.getEnterpriseId().equals(device.getEnterpriseId()))
                 .filter(driver -> driver.getFleetId().equals(device.getFleetId()))
@@ -108,6 +113,7 @@ public class DrivingSessionService {
     @Transactional
     public SessionCurrentResponseData signIn(DeviceAuthContext authContext, SignInSessionRequest request) {
         Device device = authContext.device();
+        deviceService.ensureReadyForSignIn(device);
         if (drivingSessionRepository.findFirstByDeviceIdAndStatusOrderBySignInTimeDesc(device.getId(), SessionStatus.ACTIVE.getCode()).isPresent()) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "当前设备已有进行中的会话");
         }

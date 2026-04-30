@@ -4,7 +4,9 @@ import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.auth.service.BusinessAccessService;
 import com.example.demo.device.dto.DevicePageResponseData;
 import com.example.demo.device.entity.Device;
+import com.example.demo.device.model.EdgeDeviceStatus;
 import com.example.demo.device.repository.DeviceRepository;
+import com.example.demo.device.repository.EdgeDeviceBindRequestRepository;
 import com.example.demo.device.service.DeviceService;
 import com.example.demo.driver.entity.Driver;
 import com.example.demo.driver.repository.DriverRepository;
@@ -40,6 +42,7 @@ class DeviceServiceTest {
         EnterpriseRepository enterpriseRepository = mock(EnterpriseRepository.class);
         FleetRepository fleetRepository = mock(FleetRepository.class);
         DriverRepository driverRepository = mock(DriverRepository.class);
+        EdgeDeviceBindRequestRepository edgeDeviceBindRequestRepository = mock(EdgeDeviceBindRequestRepository.class);
         BusinessAccessService businessAccessService = mock(BusinessAccessService.class);
         SystemAuditService systemAuditService = mock(SystemAuditService.class);
         EdgeConfigVersionResolver edgeConfigVersionResolver = mock(EdgeConfigVersionResolver.class);
@@ -51,6 +54,7 @@ class DeviceServiceTest {
                 enterpriseRepository,
                 fleetRepository,
                 driverRepository,
+                edgeDeviceBindRequestRepository,
                 businessAccessService,
                 systemAuditService,
                 edgeConfigVersionResolver);
@@ -59,7 +63,7 @@ class DeviceServiceTest {
         device.setId(1L);
         device.setDeviceCode("DEV001");
         device.setDeviceToken("TOKEN001");
-        device.setStatus((byte) 1);
+        device.setStatus(EdgeDeviceStatus.VEHICLE_BOUND.name());
         DrivingSession session = new DrivingSession();
         session.setId(2L);
         session.setDeviceId(1L);
@@ -70,8 +74,8 @@ class DeviceServiceTest {
 
         service.authenticateAndTouch("DEV001", "TOKEN001");
 
-        assertThat(device.getLastOnlineAt()).isNotNull();
-        assertThat(session.getLastHeartbeatAt()).isEqualTo(device.getLastOnlineAt());
+        assertThat(device.getLastSeenAt()).isNotNull();
+        assertThat(session.getLastHeartbeatAt()).isEqualTo(device.getLastSeenAt());
         verify(deviceRepository).save(device);
         verify(sessionRepository).save(session);
     }
@@ -84,6 +88,7 @@ class DeviceServiceTest {
         EnterpriseRepository enterpriseRepository = mock(EnterpriseRepository.class);
         FleetRepository fleetRepository = mock(FleetRepository.class);
         DriverRepository driverRepository = mock(DriverRepository.class);
+        EdgeDeviceBindRequestRepository edgeDeviceBindRequestRepository = mock(EdgeDeviceBindRequestRepository.class);
         BusinessAccessService businessAccessService = mock(BusinessAccessService.class);
         SystemAuditService systemAuditService = mock(SystemAuditService.class);
         EdgeConfigVersionResolver edgeConfigVersionResolver = mock(EdgeConfigVersionResolver.class);
@@ -95,6 +100,7 @@ class DeviceServiceTest {
                 enterpriseRepository,
                 fleetRepository,
                 driverRepository,
+                edgeDeviceBindRequestRepository,
                 businessAccessService,
                 systemAuditService,
                 edgeConfigVersionResolver);
@@ -106,8 +112,8 @@ class DeviceServiceTest {
         device.setVehicleId(30L);
         device.setDeviceCode("DEV001");
         device.setDeviceName("Main Device");
-        device.setStatus((byte) 1);
-        device.setLastOnlineAt(LocalDateTime.of(2026, 4, 28, 10, 0));
+        device.setStatus(EdgeDeviceStatus.VEHICLE_BOUND.name());
+        device.setLastSeenAt(LocalDateTime.of(2026, 4, 28, 10, 0));
 
         DrivingSession session = new DrivingSession();
         session.setId(99L);
@@ -121,7 +127,7 @@ class DeviceServiceTest {
         driver.setDriverCode("DRV001");
         driver.setName("张三");
 
-        when(businessAccessService.resolveReadableEnterpriseId(any(), eq(null))).thenReturn(null);
+        when(businessAccessService.isSuperAdmin(any())).thenReturn(true);
         when(deviceRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(device)));
         when(sessionRepository.findByStatusAndDeviceIdInOrderBySignInTimeDesc(SessionStatus.ACTIVE.getCode(), List.of(1L)))
@@ -131,7 +137,7 @@ class DeviceServiceTest {
         DevicePageResponseData result = service.listDevices(operator(), 1, 20, null, null, null);
 
         assertThat(result.items()).hasSize(1);
-        assertThat(result.items().get(0).lastOnlineAt()).isNotNull();
+        assertThat(result.items().get(0).lastSeenAt()).isNotNull();
         assertThat(result.items().get(0).currentDriverId()).isEqualTo(7L);
         assertThat(result.items().get(0).currentDriverCode()).isEqualTo("DRV001");
         assertThat(result.items().get(0).currentSessionId()).isEqualTo(99L);

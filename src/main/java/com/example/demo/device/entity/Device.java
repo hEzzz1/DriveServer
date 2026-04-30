@@ -10,20 +10,20 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "device")
+@Table(name = "edge_device")
 public class Device {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "enterprise_id", nullable = false)
+    @Column(name = "enterprise_id")
     private Long enterpriseId;
 
-    @Column(name = "fleet_id", nullable = false)
+    @Column(name = "fleet_id")
     private Long fleetId;
 
-    @Column(name = "vehicle_id", nullable = false)
+    @Column(name = "vehicle_id")
     private Long vehicleId;
 
     @Column(name = "device_code", nullable = false, length = 64, unique = true)
@@ -41,14 +41,14 @@ public class Device {
     @Column(name = "last_activated_at")
     private LocalDateTime lastActivatedAt;
 
-    @Column(name = "last_online_at")
-    private LocalDateTime lastOnlineAt;
+    @Column(name = "last_seen_at")
+    private LocalDateTime lastSeenAt;
 
     @Column(name = "token_rotated_at")
     private LocalDateTime tokenRotatedAt;
 
-    @Column(nullable = false)
-    private Byte status;
+    @Column(nullable = false, length = 64)
+    private String status;
 
     @Column(length = 255)
     private String remark;
@@ -131,12 +131,12 @@ public class Device {
         this.lastActivatedAt = lastActivatedAt;
     }
 
-    public LocalDateTime getLastOnlineAt() {
-        return lastOnlineAt;
+    public LocalDateTime getLastSeenAt() {
+        return lastSeenAt;
     }
 
-    public void setLastOnlineAt(LocalDateTime lastOnlineAt) {
-        this.lastOnlineAt = lastOnlineAt;
+    public void setLastSeenAt(LocalDateTime lastSeenAt) {
+        this.lastSeenAt = lastSeenAt;
     }
 
     public LocalDateTime getTokenRotatedAt() {
@@ -147,11 +147,11 @@ public class Device {
         this.tokenRotatedAt = tokenRotatedAt;
     }
 
-    public Byte getStatus() {
+    public String getStatus() {
         return status;
     }
 
-    public void setStatus(Byte status) {
+    public void setStatus(String status) {
         this.status = status;
     }
 
