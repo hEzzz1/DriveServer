@@ -34,7 +34,10 @@ public class BusinessAccessService {
 
     public Long resolveReadableEnterpriseId(AuthenticatedUser operator, Long requestedEnterpriseId) {
         if (isPlatformAdmin(operator)) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+            if (requestedEnterpriseId == null) {
+                throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId不能为空");
+            }
+            return requestedEnterpriseId;
         }
         BusinessDataScope scope = getAuthorizationProfile(operator).dataScope();
         if (requestedEnterpriseId != null) {
@@ -54,7 +57,7 @@ public class BusinessAccessService {
             throw new BusinessException(ApiCode.INVALID_PARAM, "enterpriseId不能为空");
         }
         if (isPlatformAdmin(operator)) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+            return;
         }
         if (getAuthorizationProfile(operator).dataScope().canAccessEnterpriseResource(targetEnterpriseId)) {
             return;
@@ -64,7 +67,7 @@ public class BusinessAccessService {
 
     public void assertCanAccessEnterprise(AuthenticatedUser operator, Long enterpriseId) {
         if (isPlatformAdmin(operator)) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+            return;
         }
         if (enterpriseId == null || !getAuthorizationProfile(operator).dataScope().canAccessEnterpriseResource(enterpriseId)) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
@@ -73,7 +76,7 @@ public class BusinessAccessService {
 
     public void assertCanAccessData(AuthenticatedUser operator, Long enterpriseId, Long fleetId) {
         if (isPlatformAdmin(operator)) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+            return;
         }
         if (!getAuthorizationProfile(operator).dataScope().canAccessData(enterpriseId, fleetId)) {
             throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
@@ -82,7 +85,7 @@ public class BusinessAccessService {
 
     public BusinessDataScope resolveDataScope(AuthenticatedUser operator, Long requestedEnterpriseId, Long requestedFleetId) {
         if (isPlatformAdmin(operator)) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+            return resolvePlatformDataScope(requestedEnterpriseId, requestedFleetId);
         }
         BusinessDataScope scope = getAuthorizationProfile(operator).dataScope();
         if (scope.isEmpty()) {
@@ -135,5 +138,21 @@ public class BusinessAccessService {
 
     public boolean hasPermission(AuthenticatedUser operator, String permission) {
         return getAuthorizationProfile(operator).hasPermission(permission);
+    }
+
+    private BusinessDataScope resolvePlatformDataScope(Long requestedEnterpriseId, Long requestedFleetId) {
+        if (requestedFleetId != null) {
+            Long fleetEnterpriseId = fleetRepository.findById(requestedFleetId)
+                    .orElseThrow(() -> new BusinessException(ApiCode.INVALID_PARAM, "fleetId不存在"))
+                    .getEnterpriseId();
+            if (requestedEnterpriseId != null && !requestedEnterpriseId.equals(fleetEnterpriseId)) {
+                throw new BusinessException(ApiCode.FORBIDDEN, "无权限访问");
+            }
+            return BusinessDataScope.globalScope().restrictToFleet(requestedFleetId, fleetEnterpriseId);
+        }
+        if (requestedEnterpriseId != null) {
+            return BusinessDataScope.globalScope().restrictToEnterprise(requestedEnterpriseId);
+        }
+        return BusinessDataScope.globalScope();
     }
 }

@@ -41,21 +41,15 @@ public enum RoleTemplateCode {
 
     public Set<String> defaultPermissions() {
         return switch (this) {
-            case PLATFORM_SUPER_ADMIN -> new LinkedHashSet<>(Set.of(
-                    PermissionCode.RULE_READ.code(),
-                    PermissionCode.RULE_MANAGE.code(),
-                    PermissionCode.AUDIT_READ.code(),
-                    PermissionCode.AUDIT_EXPORT.code(),
-                    PermissionCode.SYSTEM_READ.code(),
-                    PermissionCode.USER_READ.code(),
-                    PermissionCode.USER_MANAGE.code(),
-                    PermissionCode.ENTERPRISE_READ.code(),
-                    PermissionCode.ENTERPRISE_MANAGE.code()));
+            case PLATFORM_SUPER_ADMIN -> new LinkedHashSet<>(PermissionCode.allCodes());
             case PLATFORM_SYS_ADMIN -> Set.of(
                     PermissionCode.AUDIT_READ.code(),
                     PermissionCode.AUDIT_EXPORT.code(),
                     PermissionCode.SYSTEM_READ.code());
             case PLATFORM_RISK_ADMIN -> Set.of(
+                    PermissionCode.OVERVIEW_READ.code(),
+                    PermissionCode.ALERT_READ.code(),
+                    PermissionCode.STATS_READ.code(),
                     PermissionCode.RULE_READ.code(),
                     PermissionCode.RULE_MANAGE.code());
             case ORG_ADMIN -> Set.of(

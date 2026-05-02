@@ -1,10 +1,13 @@
 package com.example.demo.auth.service;
 
+import com.example.demo.auth.entity.RolePermission;
 import com.example.demo.auth.entity.UserAccount;
 import com.example.demo.auth.entity.UserScopeRole;
+import com.example.demo.auth.model.PermissionCode;
 import com.example.demo.auth.model.RoleTemplateCode;
 import com.example.demo.auth.model.ScopeType;
 import com.example.demo.auth.model.SubjectType;
+import com.example.demo.auth.repository.RolePermissionRepository;
 import com.example.demo.auth.repository.UserAccountRepository;
 import com.example.demo.auth.repository.UserScopeRoleRepository;
 import com.example.demo.auth.security.AuthenticatedUser;
@@ -22,11 +25,14 @@ public class UserAuthorizationService {
 
     private static final byte ACTIVE_STATUS = 1;
 
+    private final RolePermissionRepository rolePermissionRepository;
     private final UserAccountRepository userAccountRepository;
     private final UserScopeRoleRepository userScopeRoleRepository;
 
-    public UserAuthorizationService(UserAccountRepository userAccountRepository,
+    public UserAuthorizationService(RolePermissionRepository rolePermissionRepository,
+                                    UserAccountRepository userAccountRepository,
                                     UserScopeRoleRepository userScopeRoleRepository) {
+        this.rolePermissionRepository = rolePermissionRepository;
         this.userAccountRepository = userAccountRepository;
         this.userScopeRoleRepository = userScopeRoleRepository;
     }
@@ -64,18 +70,44 @@ public class UserAuthorizationService {
                         assignment.fleetId()))
                 .toList();
 
-        Set<String> permissionSet = new LinkedHashSet<>();
-        for (ResolvedAssignment assignment : resolvedAssignments) {
-            permissionSet.addAll(assignment.roleTemplate().defaultPermissions());
-        }
+        Set<String> permissionSet = resolvePermissions(resolvedAssignments);
 
         return new UserAuthorizationProfile(
                 roles,
                 platformRoles,
                 memberships,
-                com.example.demo.auth.model.PermissionCode.sortCodes(permissionSet),
+                PermissionCode.sortCodes(permissionSet),
                 resolveDefaultScope(platformRoles, memberships),
                 resolveDataScope(resolvedAssignments));
+    }
+
+    private Set<String> resolvePermissions(List<ResolvedAssignment> assignments) {
+        Set<String> permissionSet = new LinkedHashSet<>();
+        if (assignments.isEmpty()) {
+            return permissionSet;
+        }
+
+        Set<String> roleCodes = assignments.stream()
+                .map(assignment -> assignment.roleTemplate().name())
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Map<String, Set<String>> permissionsByRole = new LinkedHashMap<>();
+        for (RolePermission rolePermission : rolePermissionRepository.findByRoleCodeIn(roleCodes)) {
+            PermissionCode.fromCode(rolePermission.getPermissionCode())
+                    .map(PermissionCode::code)
+                    .ifPresent(permissionCode -> permissionsByRole
+                            .computeIfAbsent(rolePermission.getRoleCode(), ignored -> new LinkedHashSet<>())
+                            .add(permissionCode));
+        }
+
+        for (ResolvedAssignment assignment : assignments) {
+            Set<String> permissions = permissionsByRole.get(assignment.roleTemplate().name());
+            if (permissions == null || permissions.isEmpty()) {
+                permissionSet.addAll(assignment.roleTemplate().defaultPermissions());
+                continue;
+            }
+            permissionSet.addAll(permissions);
+        }
+        return permissionSet;
     }
 
     private List<ResolvedAssignment> resolveExplicitAssignments(Long userId) {
@@ -126,6 +158,9 @@ public class UserAuthorizationService {
     }
 
     private BusinessDataScope resolveDataScope(List<ResolvedAssignment> assignments) {
+        if (assignments.stream().anyMatch(assignment -> assignment.roleTemplate().isPlatformRole())) {
+            return BusinessDataScope.globalScope();
+        }
         Set<Long> enterpriseIds = new LinkedHashSet<>();
         Map<Long, Long> fleetEnterpriseIds = new LinkedHashMap<>();
         for (ResolvedAssignment assignment : assignments) {
