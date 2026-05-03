@@ -19,7 +19,20 @@ import com.example.demo.auth.service.BusinessAccessService;
 import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
+import com.example.demo.device.entity.Device;
+import com.example.demo.device.repository.DeviceRepository;
+import com.example.demo.driver.entity.Driver;
+import com.example.demo.driver.repository.DriverRepository;
+import com.example.demo.fleet.entity.Fleet;
+import com.example.demo.fleet.repository.FleetRepository;
+import com.example.demo.realtime.dto.RealtimeAlertMessageData;
+import com.example.demo.realtime.listener.RealtimeAlertBroadcastEvent;
+import com.example.demo.rule.entity.RuleConfig;
+import com.example.demo.rule.repository.RuleConfigRepository;
 import com.example.demo.system.service.SystemAuditService;
+import com.example.demo.vehicle.entity.Vehicle;
+import com.example.demo.vehicle.repository.VehicleRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -33,7 +46,11 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 @Service
 public class AlertService {
@@ -43,20 +60,39 @@ public class AlertService {
     private static final int DEFAULT_PAGE = 1;
     private static final int DEFAULT_SIZE = 20;
     private static final int MAX_SIZE = 100;
+    private static final int EVIDENCE_RETENTION_DAYS = 30;
 
     private final AlertEventRepository alertEventRepository;
     private final AlertActionLogRepository alertActionLogRepository;
     private final SystemAuditService systemAuditService;
     private final BusinessAccessService businessAccessService;
+    private final FleetRepository fleetRepository;
+    private final VehicleRepository vehicleRepository;
+    private final DriverRepository driverRepository;
+    private final DeviceRepository deviceRepository;
+    private final RuleConfigRepository ruleConfigRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     public AlertService(AlertEventRepository alertEventRepository,
                         AlertActionLogRepository alertActionLogRepository,
                         SystemAuditService systemAuditService,
-                        BusinessAccessService businessAccessService) {
+                        BusinessAccessService businessAccessService,
+                        FleetRepository fleetRepository,
+                        VehicleRepository vehicleRepository,
+                        DriverRepository driverRepository,
+                        DeviceRepository deviceRepository,
+                        RuleConfigRepository ruleConfigRepository,
+                        ApplicationEventPublisher applicationEventPublisher) {
         this.alertEventRepository = alertEventRepository;
         this.alertActionLogRepository = alertActionLogRepository;
         this.systemAuditService = systemAuditService;
         this.businessAccessService = businessAccessService;
+        this.fleetRepository = fleetRepository;
+        this.vehicleRepository = vehicleRepository;
+        this.driverRepository = driverRepository;
+        this.deviceRepository = deviceRepository;
+        this.ruleConfigRepository = ruleConfigRepository;
+        this.applicationEventPublisher = applicationEventPublisher;
     }
 
     @Transactional
@@ -96,6 +132,11 @@ public class AlertService {
         alert.setEdgeWindowStartMs(request.getEdgeWindowStartMs());
         alert.setEdgeWindowEndMs(request.getEdgeWindowEndMs());
         alert.setEdgeCreatedAtMs(request.getEdgeCreatedAtMs());
+        alert.setEvidenceType(normalizeOptionalText(request.getEvidenceType()));
+        alert.setEvidenceUrl(normalizeOptionalText(request.getEvidenceUrl()));
+        alert.setEvidenceMimeType(normalizeOptionalText(request.getEvidenceMimeType()));
+        alert.setEvidenceCapturedAtMs(request.getEvidenceCapturedAtMs());
+        alert.setEvidenceRetentionUntil(resolveEvidenceRetentionUntil(request.getEvidenceUrl(), request.getEvidenceRetentionUntil(), now));
         alert.setTriggerTime(LocalDateTime.ofInstant(request.getTriggerTime().toInstant(), ZoneOffset.UTC));
         alert.setStatus(AlertStatus.NEW.getCode());
         alert.setLatestActionBy(operator.getUserId());
@@ -112,6 +153,7 @@ public class AlertService {
                         "alertNo", saved.getAlertNo(),
                         "ruleId", saved.getRuleId(),
                         "status", saved.getStatus()));
+        publishRealtimeAlert("ALERT_CREATED", saved);
         return toOperationResponse(saved, AlertActionType.CREATE);
     }
 
@@ -172,9 +214,9 @@ public class AlertService {
                 pageSize,
                 Sort.by(Sort.Direction.DESC, "triggerTime").and(Sort.by(Sort.Direction.DESC, "id")));
         Page<AlertEvent> pageResult = alertEventRepository.findAll(specification, pageable);
-
+        AlertViewRefs refs = loadViewRefs(pageResult.getContent());
         List<AlertListItemData> items = pageResult.getContent().stream()
-                .map(this::toListItemData)
+                .map(alert -> toListItemData(alert, refs))
                 .toList();
         return new AlertPageResponseData(pageResult.getTotalElements(), pageNo, pageSize, items);
     }
@@ -183,13 +225,21 @@ public class AlertService {
     public AlertDetailResponseData getAlertDetail(Long alertId, AuthenticatedUser operator) {
         AlertEvent alert = getAlertOrThrow(alertId);
         businessAccessService.assertCanAccessData(operator, alert.getEnterpriseId(), alert.getFleetId());
+        AlertViewRefs refs = loadViewRefs(List.of(alert));
         return new AlertDetailResponseData(
                 alert.getId(),
                 alert.getAlertNo(),
                 alert.getFleetId(),
+                fleetLabel(refs, alert.getFleetId()),
                 alert.getVehicleId(),
+                vehicleLabel(refs, alert.getVehicleId()),
                 alert.getDriverId(),
+                driverNameLabel(refs, alert.getDriverId()),
+                driverCodeLabel(refs, alert.getDriverId()),
+                alert.getDeviceId(),
+                deviceCodeLabel(refs, alert.getDeviceId()),
                 alert.getRuleId(),
+                ruleNameLabel(refs, alert.getRuleId()),
                 alert.getRiskLevel() == null ? null : (int) alert.getRiskLevel(),
                 alert.getRiskScore(),
                 alert.getFatigueScore(),
@@ -204,7 +254,12 @@ public class AlertService {
                 alert.getEdgeTriggerReasons(),
                 alert.getEdgeWindowStartMs(),
                 alert.getEdgeWindowEndMs(),
-                alert.getEdgeCreatedAtMs());
+                alert.getEdgeCreatedAtMs(),
+                alert.getEvidenceType(),
+                alert.getEvidenceUrl(),
+                alert.getEvidenceMimeType(),
+                alert.getEvidenceCapturedAtMs(),
+                toOffsetDateTime(alert.getEvidenceRetentionUntil()));
     }
 
     private AlertOperationResponseData transition(Long alertId,
@@ -236,6 +291,7 @@ public class AlertService {
                         "alertNo", saved.getAlertNo(),
                         "fromStatus", currentStatus == null ? null : currentStatus.name(),
                         "toStatus", targetStatus.name()));
+        publishRealtimeAlert("ALERT_UPDATED", saved);
         return toOperationResponse(saved, actionType);
     }
 
@@ -304,18 +360,102 @@ public class AlertService {
         return time.atOffset(ZoneOffset.UTC);
     }
 
-    private AlertListItemData toListItemData(AlertEvent alert) {
+    private AlertListItemData toListItemData(AlertEvent alert, AlertViewRefs refs) {
         return new AlertListItemData(
                 alert.getId(),
                 alert.getAlertNo(),
                 alert.getFleetId(),
+                fleetLabel(refs, alert.getFleetId()),
                 alert.getVehicleId(),
+                vehicleLabel(refs, alert.getVehicleId()),
                 alert.getDriverId(),
+                driverNameLabel(refs, alert.getDriverId()),
+                driverCodeLabel(refs, alert.getDriverId()),
+                alert.getDeviceId(),
+                deviceCodeLabel(refs, alert.getDeviceId()),
+                alert.getRuleId(),
+                ruleNameLabel(refs, alert.getRuleId()),
                 alert.getRiskLevel() == null ? null : (int) alert.getRiskLevel(),
                 alert.getFatigueScore(),
                 alert.getDistractionScore(),
                 alert.getStatus() == null ? null : (int) alert.getStatus(),
-                toOffsetDateTime(alert.getTriggerTime()));
+                toOffsetDateTime(alert.getTriggerTime()),
+                alert.getEvidenceType(),
+                alert.getEvidenceUrl(),
+                alert.getEvidenceMimeType(),
+                alert.getEvidenceCapturedAtMs(),
+                toOffsetDateTime(alert.getEvidenceRetentionUntil()));
+    }
+
+    private void publishRealtimeAlert(String eventType, AlertEvent alert) {
+        AlertListItemData payload = toListItemData(alert, loadViewRefs(List.of(alert)));
+        applicationEventPublisher.publishEvent(new RealtimeAlertBroadcastEvent(
+                alert.getEnterpriseId(),
+                alert.getFleetId(),
+                new RealtimeAlertMessageData(eventType, OffsetDateTime.now(ZoneOffset.UTC), payload)));
+    }
+
+    private AlertViewRefs loadViewRefs(Collection<AlertEvent> alerts) {
+        if (alerts == null || alerts.isEmpty()) {
+            return new AlertViewRefs(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
+        }
+        return new AlertViewRefs(
+                indexById(fleetRepository.findAllById(alerts.stream().map(AlertEvent::getFleetId).filter(id -> id != null).distinct().toList()), Fleet::getId),
+                indexById(vehicleRepository.findAllById(alerts.stream().map(AlertEvent::getVehicleId).filter(id -> id != null).distinct().toList()), Vehicle::getId),
+                indexById(driverRepository.findAllById(alerts.stream().map(AlertEvent::getDriverId).filter(id -> id != null).distinct().toList()), Driver::getId),
+                indexById(deviceRepository.findAllById(alerts.stream().map(AlertEvent::getDeviceId).filter(id -> id != null).distinct().toList()), Device::getId),
+                indexById(ruleConfigRepository.findAllById(alerts.stream().map(AlertEvent::getRuleId).filter(id -> id != null).distinct().toList()), RuleConfig::getId));
+    }
+
+    private <T> Map<Long, T> indexById(Iterable<T> items, Function<T, Long> idGetter) {
+        Map<Long, T> result = new HashMap<>();
+        for (T item : items) {
+            Long id = idGetter.apply(item);
+            if (id != null) {
+                result.put(id, item);
+            }
+        }
+        return result;
+    }
+
+    private String fleetLabel(AlertViewRefs refs, Long fleetId) {
+        Fleet fleet = refs.fleetsById().get(fleetId);
+        return fleet == null ? null : fleet.getName();
+    }
+
+    private String vehicleLabel(AlertViewRefs refs, Long vehicleId) {
+        Vehicle vehicle = refs.vehiclesById().get(vehicleId);
+        return vehicle == null ? null : vehicle.getPlateNumber();
+    }
+
+    private String driverNameLabel(AlertViewRefs refs, Long driverId) {
+        Driver driver = refs.driversById().get(driverId);
+        return driver == null ? null : driver.getName();
+    }
+
+    private String driverCodeLabel(AlertViewRefs refs, Long driverId) {
+        Driver driver = refs.driversById().get(driverId);
+        return driver == null ? null : driver.getDriverCode();
+    }
+
+    private String deviceCodeLabel(AlertViewRefs refs, Long deviceId) {
+        Device device = refs.devicesById().get(deviceId);
+        return device == null ? null : device.getDeviceCode();
+    }
+
+    private String ruleNameLabel(AlertViewRefs refs, Long ruleId) {
+        RuleConfig rule = refs.rulesById().get(ruleId);
+        return rule == null ? null : rule.getRuleName();
+    }
+
+    private LocalDateTime resolveEvidenceRetentionUntil(String evidenceUrl,
+                                                        OffsetDateTime requestedRetentionUntil,
+                                                        LocalDateTime now) {
+        LocalDateTime requested = toUtcLocalDateTime(requestedRetentionUntil);
+        if (requested != null) {
+            return requested;
+        }
+        return StringUtils.hasText(evidenceUrl) ? now.plusDays(EVIDENCE_RETENTION_DAYS) : null;
     }
 
     private Specification<AlertEvent> buildListSpecification(BusinessDataScope dataScope,
@@ -373,5 +513,14 @@ public class AlertService {
             return null;
         }
         return LocalDateTime.ofInstant(time.toInstant(), ZoneOffset.UTC);
+    }
+
+    private record AlertViewRefs(
+            Map<Long, Fleet> fleetsById,
+            Map<Long, Vehicle> vehiclesById,
+            Map<Long, Driver> driversById,
+            Map<Long, Device> devicesById,
+            Map<Long, RuleConfig> rulesById
+    ) {
     }
 }

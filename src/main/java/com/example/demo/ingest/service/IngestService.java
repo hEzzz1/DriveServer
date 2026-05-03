@@ -73,6 +73,7 @@ public class IngestService {
                     request.getSessionId());
             eventStreamPublisher.publish(request);
             eventAlertOrchestrator.process(request, device, resolution);
+            deviceService.recordUploadSuccess(device.getDeviceCode(), deviceToken, request.getEventTime());
             log.info("INGEST_WARNING_ACCEPTED eventId={} vehicleId={} fleetId={} driverId={} resolutionStatus={}",
                     request.getEventId(),
                     request.getVehicleId(),

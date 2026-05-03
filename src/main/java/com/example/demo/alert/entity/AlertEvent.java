@@ -102,6 +102,21 @@ public class AlertEvent {
     @Column(name = "edge_created_at_ms")
     private Long edgeCreatedAtMs;
 
+    @Column(name = "evidence_type", length = 32)
+    private String evidenceType;
+
+    @Column(name = "evidence_url", columnDefinition = "LONGTEXT")
+    private String evidenceUrl;
+
+    @Column(name = "evidence_mime_type", length = 64)
+    private String evidenceMimeType;
+
+    @Column(name = "evidence_captured_at_ms")
+    private Long evidenceCapturedAtMs;
+
+    @Column(name = "evidence_retention_until")
+    private LocalDateTime evidenceRetentionUntil;
+
     @Column(name = "trigger_time", nullable = false)
     private LocalDateTime triggerTime;
 
@@ -353,6 +368,46 @@ public class AlertEvent {
 
     public void setEdgeCreatedAtMs(Long edgeCreatedAtMs) {
         this.edgeCreatedAtMs = edgeCreatedAtMs;
+    }
+
+    public String getEvidenceType() {
+        return evidenceType;
+    }
+
+    public void setEvidenceType(String evidenceType) {
+        this.evidenceType = evidenceType;
+    }
+
+    public String getEvidenceUrl() {
+        return evidenceUrl;
+    }
+
+    public void setEvidenceUrl(String evidenceUrl) {
+        this.evidenceUrl = evidenceUrl;
+    }
+
+    public String getEvidenceMimeType() {
+        return evidenceMimeType;
+    }
+
+    public void setEvidenceMimeType(String evidenceMimeType) {
+        this.evidenceMimeType = evidenceMimeType;
+    }
+
+    public Long getEvidenceCapturedAtMs() {
+        return evidenceCapturedAtMs;
+    }
+
+    public void setEvidenceCapturedAtMs(Long evidenceCapturedAtMs) {
+        this.evidenceCapturedAtMs = evidenceCapturedAtMs;
+    }
+
+    public LocalDateTime getEvidenceRetentionUntil() {
+        return evidenceRetentionUntil;
+    }
+
+    public void setEvidenceRetentionUntil(LocalDateTime evidenceRetentionUntil) {
+        this.evidenceRetentionUntil = evidenceRetentionUntil;
     }
 
     public LocalDateTime getTriggerTime() {

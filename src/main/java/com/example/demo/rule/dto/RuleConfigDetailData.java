@@ -23,7 +23,9 @@ public record RuleConfigDetailData(
         Long updatedBy,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
+        Long alertCount,
+        Long falsePositiveCount,
+        BigDecimal falsePositiveRate,
         List<RuleConfigVersionItemData> versions
 ) {
 }
-

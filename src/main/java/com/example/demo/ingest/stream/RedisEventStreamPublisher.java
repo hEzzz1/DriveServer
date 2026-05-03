@@ -74,6 +74,18 @@ public class RedisEventStreamPublisher implements EventStreamPublisher {
         if (request.getCreatedAtMs() != null) {
             body.put("createdAtMs", String.valueOf(request.getCreatedAtMs()));
         }
+        if (StringUtils.hasText(request.getEvidenceType())) {
+            body.put("evidenceType", request.getEvidenceType());
+        }
+        if (StringUtils.hasText(request.getEvidenceUrl())) {
+            body.put("evidenceUrl", request.getEvidenceUrl());
+        }
+        if (StringUtils.hasText(request.getEvidenceMimeType())) {
+            body.put("evidenceMimeType", request.getEvidenceMimeType());
+        }
+        if (request.getEvidenceCapturedAtMs() != null) {
+            body.put("evidenceCapturedAtMs", String.valueOf(request.getEvidenceCapturedAtMs()));
+        }
 
         RecordId recordId = stringRedisTemplate.opsForStream()
                 .add(StreamRecords.mapBacked(body).withStreamKey(streamKey));

@@ -15,7 +15,9 @@ public record RuleConfigListItemData(
         String status,
         Integer version,
         OffsetDateTime publishedAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        Long alertCount,
+        Long falsePositiveCount,
+        BigDecimal falsePositiveRate
 ) {
 }
-

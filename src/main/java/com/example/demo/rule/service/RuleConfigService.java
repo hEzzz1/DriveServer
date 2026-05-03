@@ -1,6 +1,8 @@
 package com.example.demo.rule.service;
 
 import com.example.demo.auth.security.AuthenticatedUser;
+import com.example.demo.alert.model.AlertStatus;
+import com.example.demo.alert.repository.AlertEventRepository;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.rule.dto.RuleConfigDetailData;
@@ -44,15 +46,18 @@ public class RuleConfigService implements RuleDefinitionProvider {
 
     private final RuleConfigRepository ruleConfigRepository;
     private final RuleConfigVersionRepository ruleConfigVersionRepository;
+    private final AlertEventRepository alertEventRepository;
     private final ObjectMapper objectMapper;
     private final SystemAuditService systemAuditService;
 
     public RuleConfigService(RuleConfigRepository ruleConfigRepository,
                              RuleConfigVersionRepository ruleConfigVersionRepository,
+                             AlertEventRepository alertEventRepository,
                              ObjectMapper objectMapper,
                              SystemAuditService systemAuditService) {
         this.ruleConfigRepository = ruleConfigRepository;
         this.ruleConfigVersionRepository = ruleConfigVersionRepository;
+        this.alertEventRepository = alertEventRepository;
         this.objectMapper = objectMapper;
         this.systemAuditService = systemAuditService;
     }
@@ -75,6 +80,7 @@ public class RuleConfigService implements RuleDefinitionProvider {
                                                 Integer size,
                                                 String status,
                                                 Boolean enabled,
+                                                Integer riskLevel,
                                                 String keyword) {
         int pageNo = normalizePage(page);
         int pageSize = normalizeSize(size);
@@ -85,6 +91,7 @@ public class RuleConfigService implements RuleDefinitionProvider {
                 .stream()
                 .filter(rule -> normalizedStatus == null || rule.getStatus().equalsIgnoreCase(normalizedStatus))
                 .filter(rule -> enabled == null || Objects.equals(rule.getEnabled(), enabled))
+                .filter(rule -> riskLevel == null || Objects.equals(rule.getRiskLevel(), riskLevel))
                 .filter(rule -> normalizedKeyword == null
                         || containsIgnoreCase(rule.getRuleCode(), normalizedKeyword)
                         || containsIgnoreCase(rule.getRuleName(), normalizedKeyword))
@@ -335,7 +342,10 @@ public class RuleConfigService implements RuleDefinitionProvider {
                 rule.getStatus(),
                 rule.getVersion(),
                 toOffsetDateTime(rule.getPublishedAt()),
-                toOffsetDateTime(rule.getUpdatedAt()));
+                toOffsetDateTime(rule.getUpdatedAt()),
+                ruleAlertCount(rule.getId()),
+                ruleFalsePositiveCount(rule.getId()),
+                ruleFalsePositiveRate(rule.getId()));
     }
 
     private RuleConfigDetailData toDetail(RuleConfig rule, List<RuleConfigVersionItemData> versions) {
@@ -358,6 +368,9 @@ public class RuleConfigService implements RuleDefinitionProvider {
                 rule.getUpdatedBy(),
                 toOffsetDateTime(rule.getCreatedAt()),
                 toOffsetDateTime(rule.getUpdatedAt()),
+                ruleAlertCount(rule.getId()),
+                ruleFalsePositiveCount(rule.getId()),
+                ruleFalsePositiveRate(rule.getId()),
                 versions);
     }
 
@@ -377,6 +390,23 @@ public class RuleConfigService implements RuleDefinitionProvider {
                 version.getChangeSummary(),
                 version.getCreatedBy(),
                 toOffsetDateTime(version.getCreatedAt()));
+    }
+
+    private Long ruleAlertCount(Long ruleId) {
+        return alertEventRepository.countByRuleId(ruleId);
+    }
+
+    private Long ruleFalsePositiveCount(Long ruleId) {
+        return alertEventRepository.countByRuleIdAndStatus(ruleId, AlertStatus.FALSE_POSITIVE.getCode());
+    }
+
+    private BigDecimal ruleFalsePositiveRate(Long ruleId) {
+        long total = ruleAlertCount(ruleId);
+        if (total <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return BigDecimal.valueOf(ruleFalsePositiveCount(ruleId))
+                .divide(BigDecimal.valueOf(total), 4, java.math.RoundingMode.HALF_UP);
     }
 
     private RuleOperationResponseData toOperationResponse(RuleConfig rule, String actionType, String summary) {

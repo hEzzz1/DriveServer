@@ -40,8 +40,9 @@ public class RuleController {
                                                         @RequestParam(required = false) Integer size,
                                                         @RequestParam(required = false) String status,
                                                         @RequestParam(required = false) Boolean enabled,
+                                                        @RequestParam(required = false) Integer riskLevel,
                                                         @RequestParam(required = false) String keyword) {
-        return ApiResponse.success(ruleConfigService.listRules(page, size, status, enabled, keyword));
+        return ApiResponse.success(ruleConfigService.listRules(page, size, status, enabled, riskLevel, keyword));
     }
 
     @GetMapping("/{id}")

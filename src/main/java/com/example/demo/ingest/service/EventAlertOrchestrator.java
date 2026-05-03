@@ -132,6 +132,11 @@ public class EventAlertOrchestrator {
         createRequest.setEdgeWindowStartMs(request.getWindowStartMs());
         createRequest.setEdgeWindowEndMs(request.getWindowEndMs());
         createRequest.setEdgeCreatedAtMs(request.getCreatedAtMs());
+        createRequest.setEvidenceType(normalizeOptionalText(request.getEvidenceType()));
+        createRequest.setEvidenceUrl(normalizeOptionalText(request.getEvidenceUrl()));
+        createRequest.setEvidenceMimeType(normalizeOptionalText(request.getEvidenceMimeType()));
+        createRequest.setEvidenceCapturedAtMs(request.getEvidenceCapturedAtMs());
+        createRequest.setEvidenceRetentionUntil(null);
         createRequest.setTriggerTime(request.getEventTime());
         createRequest.setRemark("Warning accepted from event " + request.getEventId());
         return createRequest;

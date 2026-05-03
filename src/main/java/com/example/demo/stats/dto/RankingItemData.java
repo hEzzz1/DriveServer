@@ -6,6 +6,7 @@ public class RankingItemData {
 
     private int rank;
     private Long dimensionValue;
+    private String dimensionName;
     private long alertCount;
     private long highRiskCount;
     private BigDecimal avgRiskScore;
@@ -17,6 +18,7 @@ public class RankingItemData {
 
     public RankingItemData(int rank,
                            Long dimensionValue,
+                           String dimensionName,
                            long alertCount,
                            long highRiskCount,
                            BigDecimal avgRiskScore,
@@ -24,6 +26,7 @@ public class RankingItemData {
                            BigDecimal avgDistractionScore) {
         this.rank = rank;
         this.dimensionValue = dimensionValue;
+        this.dimensionName = dimensionName;
         this.alertCount = alertCount;
         this.highRiskCount = highRiskCount;
         this.avgRiskScore = avgRiskScore;
@@ -45,6 +48,14 @@ public class RankingItemData {
 
     public void setDimensionValue(Long dimensionValue) {
         this.dimensionValue = dimensionValue;
+    }
+
+    public String getDimensionName() {
+        return dimensionName;
+    }
+
+    public void setDimensionName(String dimensionName) {
+        this.dimensionName = dimensionName;
     }
 
     public long getAlertCount() {

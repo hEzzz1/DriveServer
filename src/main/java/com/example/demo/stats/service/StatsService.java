@@ -8,6 +8,14 @@ import com.example.demo.auth.service.BusinessAccessService;
 import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
+import com.example.demo.device.entity.Device;
+import com.example.demo.device.repository.DeviceRepository;
+import com.example.demo.driver.entity.Driver;
+import com.example.demo.driver.repository.DriverRepository;
+import com.example.demo.fleet.entity.Fleet;
+import com.example.demo.fleet.repository.FleetRepository;
+import com.example.demo.rule.entity.RuleConfig;
+import com.example.demo.rule.repository.RuleConfigRepository;
 import com.example.demo.stats.dto.OverviewLatestAlertItemData;
 import com.example.demo.stats.dto.OverviewRiskDistributionItemData;
 import com.example.demo.stats.dto.RankingItemData;
@@ -18,6 +26,8 @@ import com.example.demo.stats.dto.TrendResponseData;
 import com.example.demo.stats.model.RankingDimension;
 import com.example.demo.stats.model.RankingSortBy;
 import com.example.demo.stats.model.TrendGroupBy;
+import com.example.demo.vehicle.entity.Vehicle;
+import com.example.demo.vehicle.repository.VehicleRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -46,11 +56,26 @@ public class StatsService {
 
     private final AlertEventRepository alertEventRepository;
     private final BusinessAccessService businessAccessService;
+    private final FleetRepository fleetRepository;
+    private final VehicleRepository vehicleRepository;
+    private final DriverRepository driverRepository;
+    private final DeviceRepository deviceRepository;
+    private final RuleConfigRepository ruleConfigRepository;
 
     public StatsService(AlertEventRepository alertEventRepository,
-                        BusinessAccessService businessAccessService) {
+                        BusinessAccessService businessAccessService,
+                        FleetRepository fleetRepository,
+                        VehicleRepository vehicleRepository,
+                        DriverRepository driverRepository,
+                        DeviceRepository deviceRepository,
+                        RuleConfigRepository ruleConfigRepository) {
         this.alertEventRepository = alertEventRepository;
         this.businessAccessService = businessAccessService;
+        this.fleetRepository = fleetRepository;
+        this.vehicleRepository = vehicleRepository;
+        this.driverRepository = driverRepository;
+        this.deviceRepository = deviceRepository;
+        this.ruleConfigRepository = ruleConfigRepository;
     }
 
     @Transactional(readOnly = true)
@@ -66,6 +91,7 @@ public class StatsService {
                 PageRequest.of(0, LATEST_ALERT_LIMIT,
                         Sort.by(Sort.Direction.DESC, "triggerTime").and(Sort.by(Sort.Direction.DESC, "id"))))
                 .getContent();
+        StatsViewRefs latestRefs = loadStatsViewRefs(latestAlerts);
 
         long highRiskCount = recentAlerts.stream()
                 .filter(alert -> alert.getRiskLevel() != null && alert.getRiskLevel() >= 3)
@@ -90,7 +116,7 @@ public class StatsService {
                 recentAlerts.size(),
                 highRiskCount,
                 handledCount,
-                latestAlerts.stream().map(this::toOverviewLatestAlertItem).toList(),
+                latestAlerts.stream().map(alert -> toOverviewLatestAlertItem(alert, latestRefs)).toList(),
                 riskDistribution);
     }
 
@@ -171,6 +197,7 @@ public class StatsService {
                 .sorted(comparator)
                 .limit(normalizedLimit)
                 .toList();
+        Map<Long, String> dimensionNames = loadDimensionNames(sortedEntries.stream().map(Map.Entry::getKey).toList(), dimension);
 
         List<RankingItemData> items = new ArrayList<>();
         int rank = 1;
@@ -179,6 +206,7 @@ public class StatsService {
             items.add(new RankingItemData(
                     rank++,
                     entry.getKey(),
+                    dimensionNames.get(entry.getKey()),
                     accumulator.alertCount,
                     accumulator.highRiskCount,
                     accumulator.averageRiskScore(),
@@ -284,17 +312,106 @@ public class StatsService {
         return extractor.apply(alert);
     }
 
-    private OverviewLatestAlertItemData toOverviewLatestAlertItem(AlertEvent alert) {
+    private OverviewLatestAlertItemData toOverviewLatestAlertItem(AlertEvent alert, StatsViewRefs refs) {
         return new OverviewLatestAlertItemData(
                 alert.getId(),
                 alert.getAlertNo(),
                 alert.getFleetId(),
+                fleetLabel(refs, alert.getFleetId()),
                 alert.getVehicleId(),
+                vehicleLabel(refs, alert.getVehicleId()),
                 alert.getDriverId(),
+                driverNameLabel(refs, alert.getDriverId()),
+                driverCodeLabel(refs, alert.getDriverId()),
+                alert.getDeviceId(),
+                deviceCodeLabel(refs, alert.getDeviceId()),
+                alert.getRuleId(),
+                ruleNameLabel(refs, alert.getRuleId()),
                 alert.getRiskLevel() == null ? null : (int) alert.getRiskLevel(),
                 alert.getStatus() == null ? null : (int) alert.getStatus(),
                 alert.getRiskScore(),
                 toOffsetDateTime(alert.getTriggerTime()));
+    }
+
+    private StatsViewRefs loadStatsViewRefs(List<AlertEvent> alerts) {
+        if (alerts == null || alerts.isEmpty()) {
+            return new StatsViewRefs(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
+        }
+        return new StatsViewRefs(
+                indexById(fleetRepository.findAllById(alerts.stream().map(AlertEvent::getFleetId).filter(id -> id != null).distinct().toList()), Fleet::getId),
+                indexById(vehicleRepository.findAllById(alerts.stream().map(AlertEvent::getVehicleId).filter(id -> id != null).distinct().toList()), Vehicle::getId),
+                indexById(driverRepository.findAllById(alerts.stream().map(AlertEvent::getDriverId).filter(id -> id != null).distinct().toList()), Driver::getId),
+                indexById(deviceRepository.findAllById(alerts.stream().map(AlertEvent::getDeviceId).filter(id -> id != null).distinct().toList()), Device::getId),
+                indexById(ruleConfigRepository.findAllById(alerts.stream().map(AlertEvent::getRuleId).filter(id -> id != null).distinct().toList()), RuleConfig::getId));
+    }
+
+    private <T> Map<Long, T> indexById(Iterable<T> items, Function<T, Long> idGetter) {
+        Map<Long, T> result = new LinkedHashMap<>();
+        for (T item : items) {
+            Long id = idGetter.apply(item);
+            if (id != null) {
+                result.put(id, item);
+            }
+        }
+        return result;
+    }
+
+    private Map<Long, String> loadDimensionNames(List<Long> ids, RankingDimension dimension) {
+        List<Long> distinctIds = ids.stream().filter(id -> id != null).distinct().toList();
+        if (distinctIds.isEmpty()) {
+            return Map.of();
+        }
+        if (dimension == RankingDimension.FLEET_ID) {
+            return fleetRepository.findAllById(distinctIds).stream()
+                    .collect(java.util.stream.Collectors.toMap(Fleet::getId, Fleet::getName));
+        }
+        if (dimension == RankingDimension.VEHICLE_ID) {
+            return vehicleRepository.findAllById(distinctIds).stream()
+                    .collect(java.util.stream.Collectors.toMap(Vehicle::getId, Vehicle::getPlateNumber));
+        }
+        if (dimension == RankingDimension.DRIVER_ID) {
+            return driverRepository.findAllById(distinctIds).stream()
+                    .collect(java.util.stream.Collectors.toMap(Driver::getId, this::driverDisplayName));
+        }
+        return ruleConfigRepository.findAllById(distinctIds).stream()
+                .collect(java.util.stream.Collectors.toMap(RuleConfig::getId, RuleConfig::getRuleName));
+    }
+
+    private String fleetLabel(StatsViewRefs refs, Long fleetId) {
+        Fleet fleet = refs.fleetsById().get(fleetId);
+        return fleet == null ? null : fleet.getName();
+    }
+
+    private String vehicleLabel(StatsViewRefs refs, Long vehicleId) {
+        Vehicle vehicle = refs.vehiclesById().get(vehicleId);
+        return vehicle == null ? null : vehicle.getPlateNumber();
+    }
+
+    private String driverNameLabel(StatsViewRefs refs, Long driverId) {
+        Driver driver = refs.driversById().get(driverId);
+        return driver == null ? null : driver.getName();
+    }
+
+    private String driverCodeLabel(StatsViewRefs refs, Long driverId) {
+        Driver driver = refs.driversById().get(driverId);
+        return driver == null ? null : driver.getDriverCode();
+    }
+
+    private String deviceCodeLabel(StatsViewRefs refs, Long deviceId) {
+        Device device = refs.devicesById().get(deviceId);
+        return device == null ? null : device.getDeviceCode();
+    }
+
+    private String ruleNameLabel(StatsViewRefs refs, Long ruleId) {
+        RuleConfig rule = refs.rulesById().get(ruleId);
+        return rule == null ? null : rule.getRuleName();
+    }
+
+    private String driverDisplayName(Driver driver) {
+        if (driver.getDriverCode() == null || driver.getDriverCode().isBlank()) {
+            return driver.getName();
+        }
+        return driver.getName() + " / " + driver.getDriverCode();
     }
 
     private int normalizeLimit(Integer limit) {
@@ -336,6 +453,15 @@ public class StatsService {
 
     private LocalDateTime toUtcLocalDateTime(OffsetDateTime time) {
         return LocalDateTime.ofInstant(time.toInstant(), ZoneOffset.UTC);
+    }
+
+    private record StatsViewRefs(
+            Map<Long, Fleet> fleetsById,
+            Map<Long, Vehicle> vehiclesById,
+            Map<Long, Driver> driversById,
+            Map<Long, Device> devicesById,
+            Map<Long, RuleConfig> rulesById
+    ) {
     }
 
     private static final class BucketAccumulator {

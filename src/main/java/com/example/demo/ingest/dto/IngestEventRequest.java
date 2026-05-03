@@ -78,6 +78,17 @@ public class IngestEventRequest {
 
     private Long createdAtMs;
 
+    @Size(max = 32)
+    private String evidenceType;
+
+    private String evidenceUrl;
+
+    @Size(max = 64)
+    private String evidenceMimeType;
+
+    @Min(0)
+    private Long evidenceCapturedAtMs;
+
     public String getEventId() {
         return eventId;
     }
@@ -252,5 +263,37 @@ public class IngestEventRequest {
 
     public void setCreatedAtMs(Long createdAtMs) {
         this.createdAtMs = createdAtMs;
+    }
+
+    public String getEvidenceType() {
+        return evidenceType;
+    }
+
+    public void setEvidenceType(String evidenceType) {
+        this.evidenceType = evidenceType;
+    }
+
+    public String getEvidenceUrl() {
+        return evidenceUrl;
+    }
+
+    public void setEvidenceUrl(String evidenceUrl) {
+        this.evidenceUrl = evidenceUrl;
+    }
+
+    public String getEvidenceMimeType() {
+        return evidenceMimeType;
+    }
+
+    public void setEvidenceMimeType(String evidenceMimeType) {
+        this.evidenceMimeType = evidenceMimeType;
+    }
+
+    public Long getEvidenceCapturedAtMs() {
+        return evidenceCapturedAtMs;
+    }
+
+    public void setEvidenceCapturedAtMs(Long evidenceCapturedAtMs) {
+        this.evidenceCapturedAtMs = evidenceCapturedAtMs;
     }
 }

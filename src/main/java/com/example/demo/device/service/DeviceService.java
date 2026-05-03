@@ -13,6 +13,7 @@ import com.example.demo.device.dto.DeviceContextResponseData;
 import com.example.demo.device.dto.DeviceDetailResponseData;
 import com.example.demo.device.dto.DeviceListItemData;
 import com.example.demo.device.dto.DevicePageResponseData;
+import com.example.demo.device.dto.DeviceTelemetryRequest;
 import com.example.demo.device.dto.ReassignDeviceVehicleRequest;
 import com.example.demo.device.dto.RotateDeviceTokenResponseData;
 import com.example.demo.device.dto.UpdateDeviceRequest;
@@ -226,6 +227,33 @@ public class DeviceService {
         systemAuditService.record(operator, "DEVICE", "ROTATE_DEVICE_TOKEN", "DEVICE", String.valueOf(device.getId()),
                 "SUCCESS", "轮换设备token", auditDetail(operator, device, null, snapshot(device)));
         return new RotateDeviceTokenResponseData(device.getId(), device.getDeviceCode(), device.getDeviceToken(), toOffsetDateTime(now));
+    }
+
+    @Transactional
+    public void recordUploadSuccess(String deviceCode, String deviceToken, OffsetDateTime eventTime) {
+        Device device = authenticateDevice(deviceCode, deviceToken);
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        device.setUploadLastSuccessAt(eventTime == null ? now : toLocalDateTime(eventTime));
+        device.setUploadLastReportAt(now);
+        deviceRepository.save(device);
+    }
+
+    @Transactional
+    public DeviceDetailResponseData recordTelemetry(AuthenticatedUser operator, Long deviceId, DeviceTelemetryRequest request) {
+        Device device = getDeviceEntity(deviceId);
+        assertCanAccessDevice(operator, device);
+        applyTelemetry(device, request);
+        Device saved = deviceRepository.save(device);
+        systemAuditService.record(operator, "DEVICE", "UPDATE_DEVICE_TELEMETRY", "DEVICE", String.valueOf(saved.getId()),
+                "SUCCESS", "更新设备遥测", auditDetail(operator, saved, null, snapshot(saved)));
+        return toDetail(saved, loadDeviceViewRefs(List.of(saved)));
+    }
+
+    @Transactional
+    public void recordEdgeTelemetry(String deviceCode, String deviceToken, DeviceTelemetryRequest request) {
+        Device device = authenticateDevice(deviceCode, deviceToken);
+        applyTelemetry(device, request);
+        deviceRepository.save(device);
     }
 
     @Transactional
@@ -502,6 +530,12 @@ public class DeviceService {
                 state.lifecycleStatus().name(), state.enterpriseBindStatus().name(), state.vehicleBindStatus().name(),
                 state.sessionStage().name(), state.effectiveStage().name(),
                 toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getLastSeenAt()), toOffsetDateTime(device.getTokenRotatedAt()),
+                device.getUploadQueueSize(),
+                toOffsetDateTime(device.getUploadLastSuccessAt()),
+                toOffsetDateTime(device.getUploadLastFailedAt()),
+                device.getUploadLastFailureClass(),
+                device.getUploadLastErrorMessage(),
+                toOffsetDateTime(device.getUploadLastReportAt()),
                 currentDriver == null ? null : currentDriver.getId(),
                 currentDriver == null ? null : currentDriver.getDriverCode(),
                 currentDriver == null ? null : currentDriver.getName(),
@@ -523,6 +557,12 @@ public class DeviceService {
                 state.sessionStage().name(), state.effectiveStage().name(),
                 toNamedResourceData(enterprise), toNamedResourceData(fleet), toVehicleData(vehicle),
                 toOffsetDateTime(device.getLastActivatedAt()), toOffsetDateTime(device.getLastSeenAt()), toOffsetDateTime(device.getTokenRotatedAt()),
+                device.getUploadQueueSize(),
+                toOffsetDateTime(device.getUploadLastSuccessAt()),
+                toOffsetDateTime(device.getUploadLastFailedAt()),
+                device.getUploadLastFailureClass(),
+                device.getUploadLastErrorMessage(),
+                toOffsetDateTime(device.getUploadLastReportAt()),
                 currentDriver == null ? null : currentDriver.getId(),
                 currentDriver == null ? null : currentDriver.getDriverCode(),
                 currentDriver == null ? null : currentDriver.getName(),
@@ -638,6 +678,12 @@ public class DeviceService {
         snapshot.put("deviceName", device.getDeviceName());
         snapshot.put("activationCode", device.getActivationCode());
         snapshot.put("lastSeenAt", toOffsetDateTime(device.getLastSeenAt()));
+        snapshot.put("uploadQueueSize", device.getUploadQueueSize());
+        snapshot.put("uploadLastSuccessAt", toOffsetDateTime(device.getUploadLastSuccessAt()));
+        snapshot.put("uploadLastFailedAt", toOffsetDateTime(device.getUploadLastFailedAt()));
+        snapshot.put("uploadLastFailureClass", device.getUploadLastFailureClass());
+        snapshot.put("uploadLastErrorMessage", device.getUploadLastErrorMessage());
+        snapshot.put("uploadLastReportAt", toOffsetDateTime(device.getUploadLastReportAt()));
         snapshot.put("status", device.getStatus());
         return snapshot;
     }
@@ -669,6 +715,15 @@ public class DeviceService {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
+    private void applyTelemetry(Device device, DeviceTelemetryRequest request) {
+        device.setUploadQueueSize(request.getUploadQueueSize());
+        device.setUploadLastFailureClass(normalizeOptional(request.getUploadLastFailureClass()));
+        device.setUploadLastErrorMessage(truncate(normalizeOptional(request.getUploadLastErrorMessage()), 255));
+        device.setUploadLastSuccessAt(toLocalDateTime(request.getUploadLastSuccessAt()));
+        device.setUploadLastFailedAt(toLocalDateTime(request.getUploadLastFailedAt()));
+        device.setUploadLastReportAt(LocalDateTime.now(ZoneOffset.UTC));
+    }
+
     private String normalizeStatus(Byte status, Device device) {
         if (status == null) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "status不能为空");
@@ -687,6 +742,17 @@ public class DeviceService {
 
     private OffsetDateTime toOffsetDateTime(LocalDateTime value) {
         return value == null ? null : value.atOffset(ZoneOffset.UTC);
+    }
+
+    private LocalDateTime toLocalDateTime(OffsetDateTime value) {
+        return value == null ? null : LocalDateTime.ofInstant(value.toInstant(), ZoneOffset.UTC);
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 
     private int normalizePage(Integer page) {

@@ -6,6 +6,7 @@ import com.example.demo.device.dto.DeviceActivateRequest;
 import com.example.demo.device.dto.DeviceActivateResponseData;
 import com.example.demo.device.dto.DeviceClaimResponseData;
 import com.example.demo.device.dto.DeviceContextResponseData;
+import com.example.demo.device.dto.DeviceTelemetryRequest;
 import com.example.demo.device.service.EdgeDeviceClaimService;
 import com.example.demo.device.service.DeviceService;
 import jakarta.validation.Valid;
@@ -34,6 +35,7 @@ public class EdgeDeviceController {
         return ApiResponse.success(edgeDeviceClaimService.claim(request));
     }
 
+    @Deprecated(since = "0.1.0", forRemoval = false)
     @PostMapping("/activate")
     public ApiResponse<DeviceActivateResponseData> activate(@Valid @RequestBody DeviceActivateRequest request) {
         return ApiResponse.success(deviceService.activate(request));
@@ -43,5 +45,13 @@ public class EdgeDeviceController {
     public ApiResponse<DeviceContextResponseData> context(@RequestHeader(value = "X-Device-Code", required = false) String deviceCode,
                                                           @RequestHeader(value = "X-Device-Token", required = false) String deviceToken) {
         return ApiResponse.success(deviceService.getContext(deviceCode, deviceToken));
+    }
+
+    @PostMapping("/telemetry")
+    public ApiResponse<Boolean> telemetry(@RequestHeader(value = "X-Device-Code", required = false) String deviceCode,
+                                          @RequestHeader(value = "X-Device-Token", required = false) String deviceToken,
+                                          @Valid @RequestBody DeviceTelemetryRequest request) {
+        deviceService.recordEdgeTelemetry(deviceCode, deviceToken, request);
+        return ApiResponse.success(true);
     }
 }

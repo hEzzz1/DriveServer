@@ -47,6 +47,24 @@ public class Device {
     @Column(name = "token_rotated_at")
     private LocalDateTime tokenRotatedAt;
 
+    @Column(name = "upload_queue_size")
+    private Integer uploadQueueSize;
+
+    @Column(name = "upload_last_success_at")
+    private LocalDateTime uploadLastSuccessAt;
+
+    @Column(name = "upload_last_failed_at")
+    private LocalDateTime uploadLastFailedAt;
+
+    @Column(name = "upload_last_failure_class", length = 64)
+    private String uploadLastFailureClass;
+
+    @Column(name = "upload_last_error_message", length = 255)
+    private String uploadLastErrorMessage;
+
+    @Column(name = "upload_last_report_at")
+    private LocalDateTime uploadLastReportAt;
+
     @Column(nullable = false, length = 64)
     private String status;
 
@@ -145,6 +163,54 @@ public class Device {
 
     public void setTokenRotatedAt(LocalDateTime tokenRotatedAt) {
         this.tokenRotatedAt = tokenRotatedAt;
+    }
+
+    public Integer getUploadQueueSize() {
+        return uploadQueueSize;
+    }
+
+    public void setUploadQueueSize(Integer uploadQueueSize) {
+        this.uploadQueueSize = uploadQueueSize;
+    }
+
+    public LocalDateTime getUploadLastSuccessAt() {
+        return uploadLastSuccessAt;
+    }
+
+    public void setUploadLastSuccessAt(LocalDateTime uploadLastSuccessAt) {
+        this.uploadLastSuccessAt = uploadLastSuccessAt;
+    }
+
+    public LocalDateTime getUploadLastFailedAt() {
+        return uploadLastFailedAt;
+    }
+
+    public void setUploadLastFailedAt(LocalDateTime uploadLastFailedAt) {
+        this.uploadLastFailedAt = uploadLastFailedAt;
+    }
+
+    public String getUploadLastFailureClass() {
+        return uploadLastFailureClass;
+    }
+
+    public void setUploadLastFailureClass(String uploadLastFailureClass) {
+        this.uploadLastFailureClass = uploadLastFailureClass;
+    }
+
+    public String getUploadLastErrorMessage() {
+        return uploadLastErrorMessage;
+    }
+
+    public void setUploadLastErrorMessage(String uploadLastErrorMessage) {
+        this.uploadLastErrorMessage = uploadLastErrorMessage;
+    }
+
+    public LocalDateTime getUploadLastReportAt() {
+        return uploadLastReportAt;
+    }
+
+    public void setUploadLastReportAt(LocalDateTime uploadLastReportAt) {
+        this.uploadLastReportAt = uploadLastReportAt;
     }
 
     public String getStatus() {

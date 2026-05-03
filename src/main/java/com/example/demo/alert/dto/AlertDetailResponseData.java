@@ -8,9 +8,16 @@ public class AlertDetailResponseData {
     private Long id;
     private String alertNo;
     private Long fleetId;
+    private String fleetName;
     private Long vehicleId;
+    private String vehiclePlateNumber;
     private Long driverId;
+    private String driverName;
+    private String driverCode;
+    private Long deviceId;
+    private String deviceCode;
     private Long ruleId;
+    private String ruleName;
     private Integer riskLevel;
     private BigDecimal riskScore;
     private BigDecimal fatigueScore;
@@ -26,13 +33,25 @@ public class AlertDetailResponseData {
     private Long edgeWindowStartMs;
     private Long edgeWindowEndMs;
     private Long edgeCreatedAtMs;
+    private String evidenceType;
+    private String evidenceUrl;
+    private String evidenceMimeType;
+    private Long evidenceCapturedAtMs;
+    private OffsetDateTime evidenceRetentionUntil;
 
     public AlertDetailResponseData(Long id,
                                    String alertNo,
                                    Long fleetId,
+                                   String fleetName,
                                    Long vehicleId,
+                                   String vehiclePlateNumber,
                                    Long driverId,
+                                   String driverName,
+                                   String driverCode,
+                                   Long deviceId,
+                                   String deviceCode,
                                    Long ruleId,
+                                   String ruleName,
                                    Integer riskLevel,
                                    BigDecimal riskScore,
                                    BigDecimal fatigueScore,
@@ -47,13 +66,25 @@ public class AlertDetailResponseData {
                                    String edgeTriggerReasons,
                                    Long edgeWindowStartMs,
                                    Long edgeWindowEndMs,
-                                   Long edgeCreatedAtMs) {
+                                   Long edgeCreatedAtMs,
+                                   String evidenceType,
+                                   String evidenceUrl,
+                                   String evidenceMimeType,
+                                   Long evidenceCapturedAtMs,
+                                   OffsetDateTime evidenceRetentionUntil) {
         this.id = id;
         this.alertNo = alertNo;
         this.fleetId = fleetId;
+        this.fleetName = fleetName;
         this.vehicleId = vehicleId;
+        this.vehiclePlateNumber = vehiclePlateNumber;
         this.driverId = driverId;
+        this.driverName = driverName;
+        this.driverCode = driverCode;
+        this.deviceId = deviceId;
+        this.deviceCode = deviceCode;
         this.ruleId = ruleId;
+        this.ruleName = ruleName;
         this.riskLevel = riskLevel;
         this.riskScore = riskScore;
         this.fatigueScore = fatigueScore;
@@ -69,6 +100,11 @@ public class AlertDetailResponseData {
         this.edgeWindowStartMs = edgeWindowStartMs;
         this.edgeWindowEndMs = edgeWindowEndMs;
         this.edgeCreatedAtMs = edgeCreatedAtMs;
+        this.evidenceType = evidenceType;
+        this.evidenceUrl = evidenceUrl;
+        this.evidenceMimeType = evidenceMimeType;
+        this.evidenceCapturedAtMs = evidenceCapturedAtMs;
+        this.evidenceRetentionUntil = evidenceRetentionUntil;
     }
 
     public Long getId() {
@@ -95,12 +131,28 @@ public class AlertDetailResponseData {
         this.fleetId = fleetId;
     }
 
+    public String getFleetName() {
+        return fleetName;
+    }
+
+    public void setFleetName(String fleetName) {
+        this.fleetName = fleetName;
+    }
+
     public Long getVehicleId() {
         return vehicleId;
     }
 
     public void setVehicleId(Long vehicleId) {
         this.vehicleId = vehicleId;
+    }
+
+    public String getVehiclePlateNumber() {
+        return vehiclePlateNumber;
+    }
+
+    public void setVehiclePlateNumber(String vehiclePlateNumber) {
+        this.vehiclePlateNumber = vehiclePlateNumber;
     }
 
     public Long getDriverId() {
@@ -111,12 +163,52 @@ public class AlertDetailResponseData {
         this.driverId = driverId;
     }
 
+    public String getDriverName() {
+        return driverName;
+    }
+
+    public void setDriverName(String driverName) {
+        this.driverName = driverName;
+    }
+
+    public String getDriverCode() {
+        return driverCode;
+    }
+
+    public void setDriverCode(String driverCode) {
+        this.driverCode = driverCode;
+    }
+
+    public Long getDeviceId() {
+        return deviceId;
+    }
+
+    public void setDeviceId(Long deviceId) {
+        this.deviceId = deviceId;
+    }
+
+    public String getDeviceCode() {
+        return deviceCode;
+    }
+
+    public void setDeviceCode(String deviceCode) {
+        this.deviceCode = deviceCode;
+    }
+
     public Long getRuleId() {
         return ruleId;
     }
 
     public void setRuleId(Long ruleId) {
         this.ruleId = ruleId;
+    }
+
+    public String getRuleName() {
+        return ruleName;
+    }
+
+    public void setRuleName(String ruleName) {
+        this.ruleName = ruleName;
     }
 
     public Integer getRiskLevel() {
@@ -237,5 +329,45 @@ public class AlertDetailResponseData {
 
     public void setEdgeCreatedAtMs(Long edgeCreatedAtMs) {
         this.edgeCreatedAtMs = edgeCreatedAtMs;
+    }
+
+    public String getEvidenceType() {
+        return evidenceType;
+    }
+
+    public void setEvidenceType(String evidenceType) {
+        this.evidenceType = evidenceType;
+    }
+
+    public String getEvidenceUrl() {
+        return evidenceUrl;
+    }
+
+    public void setEvidenceUrl(String evidenceUrl) {
+        this.evidenceUrl = evidenceUrl;
+    }
+
+    public String getEvidenceMimeType() {
+        return evidenceMimeType;
+    }
+
+    public void setEvidenceMimeType(String evidenceMimeType) {
+        this.evidenceMimeType = evidenceMimeType;
+    }
+
+    public Long getEvidenceCapturedAtMs() {
+        return evidenceCapturedAtMs;
+    }
+
+    public void setEvidenceCapturedAtMs(Long evidenceCapturedAtMs) {
+        this.evidenceCapturedAtMs = evidenceCapturedAtMs;
+    }
+
+    public OffsetDateTime getEvidenceRetentionUntil() {
+        return evidenceRetentionUntil;
+    }
+
+    public void setEvidenceRetentionUntil(OffsetDateTime evidenceRetentionUntil) {
+        this.evidenceRetentionUntil = evidenceRetentionUntil;
     }
 }
