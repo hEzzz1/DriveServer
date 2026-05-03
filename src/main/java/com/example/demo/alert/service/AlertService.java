@@ -9,7 +9,6 @@ import com.example.demo.alert.dto.AlertPageResponseData;
 import com.example.demo.alert.dto.CreateAlertRequest;
 import com.example.demo.alert.entity.AlertActionLog;
 import com.example.demo.alert.entity.AlertEvent;
-import com.example.demo.alert.event.AlertRealtimeEvent;
 import com.example.demo.alert.model.AlertActionType;
 import com.example.demo.alert.model.AlertStatus;
 import com.example.demo.alert.repository.AlertActionLogRepository;
@@ -21,7 +20,6 @@ import com.example.demo.auth.service.BusinessDataScope;
 import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.system.service.SystemAuditService;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -48,18 +46,15 @@ public class AlertService {
 
     private final AlertEventRepository alertEventRepository;
     private final AlertActionLogRepository alertActionLogRepository;
-    private final ApplicationEventPublisher applicationEventPublisher;
     private final SystemAuditService systemAuditService;
     private final BusinessAccessService businessAccessService;
 
     public AlertService(AlertEventRepository alertEventRepository,
                         AlertActionLogRepository alertActionLogRepository,
-                        ApplicationEventPublisher applicationEventPublisher,
                         SystemAuditService systemAuditService,
                         BusinessAccessService businessAccessService) {
         this.alertEventRepository = alertEventRepository;
         this.alertActionLogRepository = alertActionLogRepository;
-        this.applicationEventPublisher = applicationEventPublisher;
         this.systemAuditService = systemAuditService;
         this.businessAccessService = businessAccessService;
     }
@@ -117,7 +112,6 @@ public class AlertService {
                         "alertNo", saved.getAlertNo(),
                         "ruleId", saved.getRuleId(),
                         "status", saved.getStatus()));
-        applicationEventPublisher.publishEvent(AlertRealtimeEvent.created(saved));
         return toOperationResponse(saved, AlertActionType.CREATE);
     }
 
@@ -204,7 +198,13 @@ public class AlertService {
                 alert.getStatus() == null ? null : (int) alert.getStatus(),
                 alert.getLatestActionBy(),
                 toOffsetDateTime(alert.getLatestActionTime()),
-                alert.getRemark());
+                alert.getRemark(),
+                alert.getEdgeRiskLevel(),
+                alert.getEdgeDominantRiskType(),
+                alert.getEdgeTriggerReasons(),
+                alert.getEdgeWindowStartMs(),
+                alert.getEdgeWindowEndMs(),
+                alert.getEdgeCreatedAtMs());
     }
 
     private AlertOperationResponseData transition(Long alertId,
@@ -236,7 +236,6 @@ public class AlertService {
                         "alertNo", saved.getAlertNo(),
                         "fromStatus", currentStatus == null ? null : currentStatus.name(),
                         "toStatus", targetStatus.name()));
-        applicationEventPublisher.publishEvent(AlertRealtimeEvent.updated(saved, actionType));
         return toOperationResponse(saved, actionType);
     }
 

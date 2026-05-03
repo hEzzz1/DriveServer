@@ -119,7 +119,7 @@ public class EdgeDeviceClaimService {
         DrivingSession activeSession = drivingSessionRepository.findFirstByDeviceIdAndStatusOrderBySignInTimeDesc(saved.getId(), SessionStatus.ACTIVE.getCode()).orElse(null);
 
         EdgeDeviceLifecycleStatus lifecycleStatus = deviceService.resolveLifecycleStatus(saved);
-        EdgeDeviceEnterpriseBindStatus enterpriseBindStatus = deviceService.resolveEnterpriseBindStatus(saved, null);
+        EdgeDeviceEnterpriseBindStatus enterpriseBindStatus = deviceService.resolveEnterpriseBindStatus(saved);
         EdgeDeviceVehicleBindStatus vehicleBindStatus = deviceService.resolveVehicleBindStatus(saved);
         EdgeDeviceSessionStage sessionStage = deviceService.resolveSessionStage(activeSession);
         EdgeDeviceEffectiveStage effectiveStage = deviceService.resolveEffectiveStage(lifecycleStatus, enterpriseBindStatus, vehicleBindStatus, sessionStage);

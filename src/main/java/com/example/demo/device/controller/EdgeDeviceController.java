@@ -2,14 +2,11 @@ package com.example.demo.device.controller;
 
 import com.example.demo.common.api.ApiResponse;
 import com.example.demo.device.dto.ClaimEdgeDeviceRequest;
-import com.example.demo.device.dto.CreateEdgeDeviceBindRequest;
 import com.example.demo.device.dto.DeviceActivateRequest;
 import com.example.demo.device.dto.DeviceActivateResponseData;
 import com.example.demo.device.dto.DeviceClaimResponseData;
 import com.example.demo.device.dto.DeviceContextResponseData;
-import com.example.demo.device.dto.EdgeDeviceBindRequestResponseData;
 import com.example.demo.device.service.EdgeDeviceClaimService;
-import com.example.demo.device.service.EdgeDeviceBindRequestService;
 import com.example.demo.device.service.DeviceService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,14 +22,11 @@ public class EdgeDeviceController {
 
     private final DeviceService deviceService;
     private final EdgeDeviceClaimService edgeDeviceClaimService;
-    private final EdgeDeviceBindRequestService edgeDeviceBindRequestService;
 
     public EdgeDeviceController(DeviceService deviceService,
-                                EdgeDeviceClaimService edgeDeviceClaimService,
-                                EdgeDeviceBindRequestService edgeDeviceBindRequestService) {
+                                EdgeDeviceClaimService edgeDeviceClaimService) {
         this.deviceService = deviceService;
         this.edgeDeviceClaimService = edgeDeviceClaimService;
-        this.edgeDeviceBindRequestService = edgeDeviceBindRequestService;
     }
 
     @PostMapping("/claim")
@@ -49,18 +43,5 @@ public class EdgeDeviceController {
     public ApiResponse<DeviceContextResponseData> context(@RequestHeader(value = "X-Device-Code", required = false) String deviceCode,
                                                           @RequestHeader(value = "X-Device-Token", required = false) String deviceToken) {
         return ApiResponse.success(deviceService.getContext(deviceCode, deviceToken));
-    }
-
-    @PostMapping("/bind-requests")
-    public ApiResponse<EdgeDeviceBindRequestResponseData> createBindRequest(@RequestHeader(value = "X-Device-Code", required = false) String deviceCode,
-                                                                            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken,
-                                                                            @Valid @RequestBody CreateEdgeDeviceBindRequest request) {
-        return ApiResponse.success(edgeDeviceBindRequestService.create(deviceCode, deviceToken, request));
-    }
-
-    @GetMapping("/bind-requests/current")
-    public ApiResponse<EdgeDeviceBindRequestResponseData> currentBindRequest(@RequestHeader(value = "X-Device-Code", required = false) String deviceCode,
-                                                                             @RequestHeader(value = "X-Device-Token", required = false) String deviceToken) {
-        return ApiResponse.success(edgeDeviceBindRequestService.current(deviceCode, deviceToken));
     }
 }

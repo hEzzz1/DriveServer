@@ -20,6 +20,12 @@ public class AlertDetailResponseData {
     private Long latestActionBy;
     private OffsetDateTime latestActionTime;
     private String remark;
+    private String edgeRiskLevel;
+    private String edgeDominantRiskType;
+    private String edgeTriggerReasons;
+    private Long edgeWindowStartMs;
+    private Long edgeWindowEndMs;
+    private Long edgeCreatedAtMs;
 
     public AlertDetailResponseData(Long id,
                                    String alertNo,
@@ -35,7 +41,13 @@ public class AlertDetailResponseData {
                                    Integer status,
                                    Long latestActionBy,
                                    OffsetDateTime latestActionTime,
-                                   String remark) {
+                                   String remark,
+                                   String edgeRiskLevel,
+                                   String edgeDominantRiskType,
+                                   String edgeTriggerReasons,
+                                   Long edgeWindowStartMs,
+                                   Long edgeWindowEndMs,
+                                   Long edgeCreatedAtMs) {
         this.id = id;
         this.alertNo = alertNo;
         this.fleetId = fleetId;
@@ -51,6 +63,12 @@ public class AlertDetailResponseData {
         this.latestActionBy = latestActionBy;
         this.latestActionTime = latestActionTime;
         this.remark = remark;
+        this.edgeRiskLevel = edgeRiskLevel;
+        this.edgeDominantRiskType = edgeDominantRiskType;
+        this.edgeTriggerReasons = edgeTriggerReasons;
+        this.edgeWindowStartMs = edgeWindowStartMs;
+        this.edgeWindowEndMs = edgeWindowEndMs;
+        this.edgeCreatedAtMs = edgeCreatedAtMs;
     }
 
     public Long getId() {
@@ -171,5 +189,53 @@ public class AlertDetailResponseData {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getEdgeRiskLevel() {
+        return edgeRiskLevel;
+    }
+
+    public void setEdgeRiskLevel(String edgeRiskLevel) {
+        this.edgeRiskLevel = edgeRiskLevel;
+    }
+
+    public String getEdgeDominantRiskType() {
+        return edgeDominantRiskType;
+    }
+
+    public void setEdgeDominantRiskType(String edgeDominantRiskType) {
+        this.edgeDominantRiskType = edgeDominantRiskType;
+    }
+
+    public String getEdgeTriggerReasons() {
+        return edgeTriggerReasons;
+    }
+
+    public void setEdgeTriggerReasons(String edgeTriggerReasons) {
+        this.edgeTriggerReasons = edgeTriggerReasons;
+    }
+
+    public Long getEdgeWindowStartMs() {
+        return edgeWindowStartMs;
+    }
+
+    public void setEdgeWindowStartMs(Long edgeWindowStartMs) {
+        this.edgeWindowStartMs = edgeWindowStartMs;
+    }
+
+    public Long getEdgeWindowEndMs() {
+        return edgeWindowEndMs;
+    }
+
+    public void setEdgeWindowEndMs(Long edgeWindowEndMs) {
+        this.edgeWindowEndMs = edgeWindowEndMs;
+    }
+
+    public Long getEdgeCreatedAtMs() {
+        return edgeCreatedAtMs;
+    }
+
+    public void setEdgeCreatedAtMs(Long edgeCreatedAtMs) {
+        this.edgeCreatedAtMs = edgeCreatedAtMs;
     }
 }

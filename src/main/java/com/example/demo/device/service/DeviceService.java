@@ -13,15 +13,10 @@ import com.example.demo.device.dto.DeviceContextResponseData;
 import com.example.demo.device.dto.DeviceDetailResponseData;
 import com.example.demo.device.dto.DeviceListItemData;
 import com.example.demo.device.dto.DevicePageResponseData;
-import com.example.demo.device.dto.EdgeDeviceBindRequestResponseData;
 import com.example.demo.device.dto.ReassignDeviceVehicleRequest;
 import com.example.demo.device.dto.RotateDeviceTokenResponseData;
 import com.example.demo.device.dto.UpdateDeviceRequest;
 import com.example.demo.device.entity.Device;
-import com.example.demo.device.entity.EdgeDeviceBindRequest;
-import com.example.demo.device.entity.EdgeDeviceBindRequestHistory;
-import com.example.demo.device.model.EdgeDeviceBindRequestHistoryAction;
-import com.example.demo.device.model.EdgeDeviceBindRequestStatus;
 import com.example.demo.device.model.EdgeDeviceBindStatus;
 import com.example.demo.device.model.EdgeDeviceEffectiveStage;
 import com.example.demo.device.model.EdgeDeviceEnterpriseBindStatus;
@@ -30,8 +25,6 @@ import com.example.demo.device.model.EdgeDeviceSessionStage;
 import com.example.demo.device.model.EdgeDeviceStatus;
 import com.example.demo.device.model.EdgeDeviceVehicleBindStatus;
 import com.example.demo.device.repository.DeviceRepository;
-import com.example.demo.device.repository.EdgeDeviceBindRequestHistoryRepository;
-import com.example.demo.device.repository.EdgeDeviceBindRequestRepository;
 import com.example.demo.driver.entity.Driver;
 import com.example.demo.driver.repository.DriverRepository;
 import com.example.demo.enterprise.entity.Enterprise;
@@ -71,7 +64,6 @@ public class DeviceService {
     private static final int DEFAULT_PAGE = 1;
     private static final int DEFAULT_SIZE = 20;
     private static final int MAX_SIZE = 100;
-    private static final String SYSTEM_OPERATOR_NAME = "系统";
 
     private final DeviceRepository deviceRepository;
     private final VehicleRepository vehicleRepository;
@@ -79,8 +71,6 @@ public class DeviceService {
     private final EnterpriseRepository enterpriseRepository;
     private final FleetRepository fleetRepository;
     private final DriverRepository driverRepository;
-    private final EdgeDeviceBindRequestRepository edgeDeviceBindRequestRepository;
-    private final EdgeDeviceBindRequestHistoryRepository edgeDeviceBindRequestHistoryRepository;
     private final BusinessAccessService businessAccessService;
     private final SystemAuditService systemAuditService;
     private final EdgeConfigVersionResolver edgeConfigVersionResolver;
@@ -91,8 +81,6 @@ public class DeviceService {
                          EnterpriseRepository enterpriseRepository,
                          FleetRepository fleetRepository,
                          DriverRepository driverRepository,
-                         EdgeDeviceBindRequestRepository edgeDeviceBindRequestRepository,
-                         EdgeDeviceBindRequestHistoryRepository edgeDeviceBindRequestHistoryRepository,
                          BusinessAccessService businessAccessService,
                          SystemAuditService systemAuditService,
                          EdgeConfigVersionResolver edgeConfigVersionResolver) {
@@ -102,8 +90,6 @@ public class DeviceService {
         this.enterpriseRepository = enterpriseRepository;
         this.fleetRepository = fleetRepository;
         this.driverRepository = driverRepository;
-        this.edgeDeviceBindRequestRepository = edgeDeviceBindRequestRepository;
-        this.edgeDeviceBindRequestHistoryRepository = edgeDeviceBindRequestHistoryRepository;
         this.businessAccessService = businessAccessService;
         this.systemAuditService = systemAuditService;
         this.edgeConfigVersionResolver = edgeConfigVersionResolver;
@@ -256,7 +242,7 @@ public class DeviceService {
         device.setDeviceToken(generateSecretToken());
         device.setLastActivatedAt(now);
         device.setTokenRotatedAt(now);
-        syncDeviceStatusAfterBindRequestChange(device, currentBindRequestStatus(device));
+        syncDeviceStatusAfterEnterpriseChange(device);
         systemAuditService.record(null, "DEVICE", "DEVICE_ACTIVATE", "DEVICE", String.valueOf(device.getId()),
                 "SUCCESS", "设备激活", Map.of("deviceId", device.getId(), "deviceCode", device.getDeviceCode()));
         return new DeviceActivateResponseData(device.getId(), device.getDeviceCode(), device.getDeviceName(), device.getDeviceToken(),
@@ -279,7 +265,6 @@ public class DeviceService {
                 device.getDeviceName(),
                 device.getStatus(),
                 resolveBindStatus(state.enterpriseBindStatus()).name(),
-                null,
                 new DeviceBindingViewData.ContextDeviceData(
                         device.getId(),
                         device.getDeviceCode(),
@@ -295,7 +280,6 @@ public class DeviceService {
                 toNamedResourceData(enterprise),
                 toNamedResourceData(fleet),
                 toVehicleData(vehicle),
-                null,
                 toSessionData(activeSession),
                 device.getEnterpriseId(),
                 enterprise == null ? null : enterprise.getName(),
@@ -332,7 +316,7 @@ public class DeviceService {
 
     @Transactional
     public void ensureReadyForSignIn(Device device) {
-        EdgeDeviceEnterpriseBindStatus enterpriseBindStatus = resolveEnterpriseBindStatus(device, currentBindRequestStatus(device));
+        EdgeDeviceEnterpriseBindStatus enterpriseBindStatus = resolveEnterpriseBindStatus(device);
         assertEnterpriseApprovedOrThrow(enterpriseBindStatus);
         if (device.getVehicleId() == null) {
             throw new BusinessException(ApiCode.DEVICE_NOT_BOUND_VEHICLE, ApiCode.DEVICE_NOT_BOUND_VEHICLE.getMessage());
@@ -340,36 +324,8 @@ public class DeviceService {
     }
 
     @Transactional
-    public void syncDeviceStatusAfterBindRequestChange(Device device) {
-        syncDeviceStatusAfterBindRequestChange(device, currentBindRequestStatus(device));
-    }
-
-    @Transactional
-    public String currentBindRequestStatus(Device device) {
-        EdgeDeviceBindRequest request = edgeDeviceBindRequestRepository.findTopByDeviceIdOrderByCreatedAtDesc(device.getId()).orElse(null);
-        EdgeDeviceBindRequest refreshed = refreshBindRequestIfExpired(device, request);
-        return refreshed == null ? null : refreshed.getStatus();
-    }
-
-    @Transactional
-    public EdgeDeviceBindRequest refreshBindRequestIfExpired(Device device, EdgeDeviceBindRequest bindRequest) {
-        if (bindRequest == null) {
-            return null;
-        }
-        if (EdgeDeviceBindRequestStatus.PENDING.name().equals(bindRequest.getStatus())
-                && bindRequest.getExpiresAt() != null
-                && bindRequest.getExpiresAt().isBefore(LocalDateTime.now(ZoneOffset.UTC))) {
-            LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-            bindRequest.setStatus(EdgeDeviceBindRequestStatus.EXPIRED.name());
-            bindRequest.setReviewedAt(now);
-            bindRequest.setReviewedBy(null);
-            bindRequest.setUpdatedAt(now);
-            EdgeDeviceBindRequest saved = edgeDeviceBindRequestRepository.save(bindRequest);
-            appendBindRequestHistory(saved.getId(), EdgeDeviceBindRequestHistoryAction.EXPIRED, null, SYSTEM_OPERATOR_NAME, "绑定申请已过期", now);
-            syncDeviceStatusAfterBindRequestChange(device, saved.getStatus());
-            return saved;
-        }
-        return bindRequest;
+    public void syncDeviceStatusAfterEnterpriseChange(Device device) {
+        syncDeviceStatusAfterEnterpriseChangeInternal(device);
     }
 
     public EdgeDeviceBindStatus resolveBindStatus(EdgeDeviceEnterpriseBindStatus enterpriseBindStatus) {
@@ -391,7 +347,7 @@ public class DeviceService {
         return EdgeDeviceLifecycleStatus.NEW;
     }
 
-    public EdgeDeviceEnterpriseBindStatus resolveEnterpriseBindStatus(Device device, String currentBindRequestStatus) {
+    public EdgeDeviceEnterpriseBindStatus resolveEnterpriseBindStatus(Device device) {
         if (device.getEnterpriseId() != null) {
             return EdgeDeviceEnterpriseBindStatus.APPROVED;
         }
@@ -628,7 +584,7 @@ public class DeviceService {
     private DeviceState buildDeviceState(Device device, DeviceViewRefs refs) {
         DrivingSession activeSession = refs.activeSessionsByDeviceId().get(device.getId());
         EdgeDeviceLifecycleStatus lifecycleStatus = resolveLifecycleStatus(device);
-        EdgeDeviceEnterpriseBindStatus enterpriseBindStatus = resolveEnterpriseBindStatus(device, null);
+        EdgeDeviceEnterpriseBindStatus enterpriseBindStatus = resolveEnterpriseBindStatus(device);
         EdgeDeviceVehicleBindStatus vehicleBindStatus = resolveVehicleBindStatus(device);
         EdgeDeviceSessionStage sessionStage = resolveSessionStage(activeSession);
         EdgeDeviceEffectiveStage effectiveStage = resolveEffectiveStage(lifecycleStatus, enterpriseBindStatus, vehicleBindStatus, sessionStage);
@@ -639,7 +595,7 @@ public class DeviceService {
         return EdgeDeviceStatus.BOUND;
     }
 
-    private void syncDeviceStatusAfterBindRequestChange(Device device, String requestStatus) {
+    private void syncDeviceStatusAfterEnterpriseChangeInternal(Device device) {
         if (EdgeDeviceStatus.DISABLED.name().equals(device.getStatus())) {
             deviceRepository.save(device);
             return;
@@ -670,55 +626,6 @@ public class DeviceService {
                 activeSession.getSessionNo(),
                 toOffsetDateTime(activeSession.getSignInTime()),
                 activeSession.getStatus());
-    }
-
-    private EdgeDeviceBindRequestResponseData toBindRequestSummary(EdgeDeviceBindRequest bindRequest,
-                                                                  Device device,
-                                                                  Enterprise requestedEnterprise,
-                                                                  EdgeDeviceEffectiveStage effectiveStage) {
-        if (bindRequest == null) {
-            return null;
-        }
-        return new EdgeDeviceBindRequestResponseData(
-                bindRequest.getId(),
-                bindRequest.getDeviceId(),
-                bindRequest.getDeviceCode(),
-                device.getDeviceName(),
-                device.getActivationCode(),
-                bindRequest.getRequestedEnterpriseId(),
-                bindRequest.getRequestedEnterpriseId(),
-                requestedEnterprise == null ? null : requestedEnterprise.getName(),
-                bindRequest.getStatus(),
-                bindRequest.getApplyRemark(),
-                bindRequest.getApproveRemark(),
-                bindRequest.getRejectReason(),
-                bindRequest.getApproveRemark() != null ? bindRequest.getApproveRemark() : bindRequest.getRejectReason(),
-                toOffsetDateTime(bindRequest.getSubmittedAt()),
-                toOffsetDateTime(bindRequest.getReviewedAt()),
-                bindRequest.getReviewedBy(),
-                toOffsetDateTime(bindRequest.getExpiresAt()),
-                toOffsetDateTime(bindRequest.getCreatedAt()),
-                toOffsetDateTime(bindRequest.getUpdatedAt()),
-                toOffsetDateTime(device.getLastSeenAt()),
-                effectiveStage.name(),
-                null,
-                null);
-    }
-
-    private void appendBindRequestHistory(Long bindRequestId,
-                                          EdgeDeviceBindRequestHistoryAction action,
-                                          Long operatorId,
-                                          String operatorName,
-                                          String remark,
-                                          LocalDateTime createdAt) {
-        EdgeDeviceBindRequestHistory history = new EdgeDeviceBindRequestHistory();
-        history.setBindRequestId(bindRequestId);
-        history.setAction(action.name());
-        history.setOperatorId(operatorId);
-        history.setOperatorName(operatorName);
-        history.setRemark(remark);
-        history.setCreatedAt(createdAt);
-        edgeDeviceBindRequestHistoryRepository.save(history);
     }
 
     private Map<String, Object> snapshot(Device device) {

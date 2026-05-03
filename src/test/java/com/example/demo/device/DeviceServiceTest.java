@@ -12,9 +12,7 @@ import com.example.demo.device.model.EdgeDeviceLifecycleStatus;
 import com.example.demo.device.model.EdgeDeviceStatus;
 import com.example.demo.device.model.EdgeDeviceSessionStage;
 import com.example.demo.device.model.EdgeDeviceVehicleBindStatus;
-import com.example.demo.device.repository.EdgeDeviceBindRequestHistoryRepository;
 import com.example.demo.device.repository.DeviceRepository;
-import com.example.demo.device.repository.EdgeDeviceBindRequestRepository;
 import com.example.demo.device.service.DeviceService;
 import com.example.demo.driver.entity.Driver;
 import com.example.demo.driver.repository.DriverRepository;
@@ -36,10 +34,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,8 +50,6 @@ class DeviceServiceTest {
         EnterpriseRepository enterpriseRepository = mock(EnterpriseRepository.class);
         FleetRepository fleetRepository = mock(FleetRepository.class);
         DriverRepository driverRepository = mock(DriverRepository.class);
-        EdgeDeviceBindRequestRepository edgeDeviceBindRequestRepository = mock(EdgeDeviceBindRequestRepository.class);
-        EdgeDeviceBindRequestHistoryRepository edgeDeviceBindRequestHistoryRepository = mock(EdgeDeviceBindRequestHistoryRepository.class);
         BusinessAccessService businessAccessService = mock(BusinessAccessService.class);
         SystemAuditService systemAuditService = mock(SystemAuditService.class);
         EdgeConfigVersionResolver edgeConfigVersionResolver = mock(EdgeConfigVersionResolver.class);
@@ -67,8 +61,6 @@ class DeviceServiceTest {
                 enterpriseRepository,
                 fleetRepository,
                 driverRepository,
-                edgeDeviceBindRequestRepository,
-                edgeDeviceBindRequestHistoryRepository,
                 businessAccessService,
                 systemAuditService,
                 edgeConfigVersionResolver);
@@ -102,8 +94,6 @@ class DeviceServiceTest {
         EnterpriseRepository enterpriseRepository = mock(EnterpriseRepository.class);
         FleetRepository fleetRepository = mock(FleetRepository.class);
         DriverRepository driverRepository = mock(DriverRepository.class);
-        EdgeDeviceBindRequestRepository edgeDeviceBindRequestRepository = mock(EdgeDeviceBindRequestRepository.class);
-        EdgeDeviceBindRequestHistoryRepository edgeDeviceBindRequestHistoryRepository = mock(EdgeDeviceBindRequestHistoryRepository.class);
         BusinessAccessService businessAccessService = mock(BusinessAccessService.class);
         SystemAuditService systemAuditService = mock(SystemAuditService.class);
         EdgeConfigVersionResolver edgeConfigVersionResolver = mock(EdgeConfigVersionResolver.class);
@@ -115,8 +105,6 @@ class DeviceServiceTest {
                 enterpriseRepository,
                 fleetRepository,
                 driverRepository,
-                edgeDeviceBindRequestRepository,
-                edgeDeviceBindRequestHistoryRepository,
                 businessAccessService,
                 systemAuditService,
                 edgeConfigVersionResolver);
@@ -196,8 +184,6 @@ class DeviceServiceTest {
         EnterpriseRepository enterpriseRepository = mock(EnterpriseRepository.class);
         FleetRepository fleetRepository = mock(FleetRepository.class);
         DriverRepository driverRepository = mock(DriverRepository.class);
-        EdgeDeviceBindRequestRepository edgeDeviceBindRequestRepository = mock(EdgeDeviceBindRequestRepository.class);
-        EdgeDeviceBindRequestHistoryRepository edgeDeviceBindRequestHistoryRepository = mock(EdgeDeviceBindRequestHistoryRepository.class);
         BusinessAccessService businessAccessService = mock(BusinessAccessService.class);
         SystemAuditService systemAuditService = mock(SystemAuditService.class);
         EdgeConfigVersionResolver edgeConfigVersionResolver = mock(EdgeConfigVersionResolver.class);
@@ -209,8 +195,6 @@ class DeviceServiceTest {
                 enterpriseRepository,
                 fleetRepository,
                 driverRepository,
-                edgeDeviceBindRequestRepository,
-                edgeDeviceBindRequestHistoryRepository,
                 businessAccessService,
                 systemAuditService,
                 edgeConfigVersionResolver);
@@ -234,7 +218,6 @@ class DeviceServiceTest {
         occupied.setVehicleId(30L);
 
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
-        when(edgeDeviceBindRequestRepository.findByDeviceIdInOrderByDeviceIdAscCreatedAtDesc(List.of(1L))).thenReturn(List.of());
         when(sessionRepository.findByStatusAndDeviceIdInOrderBySignInTimeDesc(SessionStatus.ACTIVE.getCode(), List.of(1L))).thenReturn(List.of());
         when(enterpriseRepository.findAllById(anyIterable())).thenReturn(List.of());
         when(fleetRepository.findAllById(anyIterable())).thenReturn(List.of());
@@ -256,8 +239,6 @@ class DeviceServiceTest {
                 mock(EnterpriseRepository.class),
                 mock(FleetRepository.class),
                 mock(DriverRepository.class),
-                mock(EdgeDeviceBindRequestRepository.class),
-                mock(EdgeDeviceBindRequestHistoryRepository.class),
                 mock(BusinessAccessService.class),
                 mock(SystemAuditService.class),
                 mock(EdgeConfigVersionResolver.class));
