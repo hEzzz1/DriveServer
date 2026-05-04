@@ -87,10 +87,10 @@ public class EdgeRuntimeConfigService {
                 68,
                 8 * 1024 * 1024,
                 30,
-                8_000L,
-                3_000L,
-                500L,
-                24);
+                4_000L,
+                1_000L,
+                33L,
+                150);
 
         return new EdgeConfigResponseData(
                 edgeConfigVersionResolver.resolveCurrentVersion(),
