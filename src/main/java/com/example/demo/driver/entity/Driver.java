@@ -20,7 +20,7 @@ public class Driver {
     @Column(name = "enterprise_id", nullable = false)
     private Long enterpriseId;
 
-    @Column(name = "fleet_id", nullable = false)
+    @Column(name = "fleet_id")
     private Long fleetId;
 
     @Column(name = "driver_code", length = 64)

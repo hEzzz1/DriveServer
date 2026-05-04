@@ -6,7 +6,6 @@ import jakarta.validation.constraints.NotNull;
 public record CreateDriverRequest(
         @NotNull(message = "enterpriseId不能为空")
         Long enterpriseId,
-        @NotNull(message = "fleetId不能为空")
         Long fleetId,
         String driverCode,
         @NotBlank(message = "name不能为空")

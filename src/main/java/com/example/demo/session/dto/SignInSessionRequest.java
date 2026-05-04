@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 public record SignInSessionRequest(
         @NotBlank(message = "driverCode不能为空")
         String driverCode,
-        @NotBlank(message = "pin不能为空")
+        @NotBlank(message = "签到码不能为空")
         String pin
 ) {
 }

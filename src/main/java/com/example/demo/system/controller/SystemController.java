@@ -2,6 +2,8 @@ package com.example.demo.system.controller;
 
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.common.api.ApiResponse;
+import com.example.demo.system.dto.SystemErrorTraceItemData;
+import com.example.demo.system.dto.SystemErrorTracePageResponseData;
 import com.example.demo.system.dto.SystemAuditDetailData;
 import com.example.demo.system.dto.SystemAuditExportResponseData;
 import com.example.demo.system.dto.SystemAuditPageResponseData;
@@ -11,6 +13,7 @@ import com.example.demo.system.dto.SystemServicesResponseData;
 import com.example.demo.system.dto.SystemSummaryResponseData;
 import com.example.demo.system.dto.SystemVersionResponseData;
 import com.example.demo.system.service.SystemAuditService;
+import com.example.demo.system.service.SystemDiagnosticsService;
 import com.example.demo.system.service.SystemManagementService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,10 +32,14 @@ public class SystemController {
 
     private final SystemManagementService systemManagementService;
     private final SystemAuditService systemAuditService;
+    private final SystemDiagnosticsService systemDiagnosticsService;
 
-    public SystemController(SystemManagementService systemManagementService, SystemAuditService systemAuditService) {
+    public SystemController(SystemManagementService systemManagementService,
+                            SystemAuditService systemAuditService,
+                            SystemDiagnosticsService systemDiagnosticsService) {
         this.systemManagementService = systemManagementService;
         this.systemAuditService = systemAuditService;
+        this.systemDiagnosticsService = systemDiagnosticsService;
     }
 
     @GetMapping("/system/health")
@@ -63,6 +70,22 @@ public class SystemController {
     @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'system.read')")
     public ApiResponse<SystemSummaryResponseData> summary() {
         return ApiResponse.success(systemManagementService.getSummary());
+    }
+
+    @GetMapping("/system/diagnostics/errors")
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'system.read')")
+    public ApiResponse<SystemErrorTracePageResponseData> diagnosticErrors(@RequestParam(required = false) String traceId,
+                                                                          @RequestParam(required = false) Integer page,
+                                                                          @RequestParam(required = false) Integer size,
+                                                                          Authentication authentication) {
+        return ApiResponse.success(systemDiagnosticsService.list(currentUser(authentication), traceId, page, size));
+    }
+
+    @GetMapping("/system/diagnostics/errors/{traceId}")
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'system.read')")
+    public ApiResponse<SystemErrorTraceItemData> diagnosticErrorDetail(@PathVariable String traceId,
+                                                                       Authentication authentication) {
+        return ApiResponse.success(systemDiagnosticsService.getByTraceId(currentUser(authentication), traceId));
     }
 
     @GetMapping({"/audits", "/audit"})

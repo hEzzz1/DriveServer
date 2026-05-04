@@ -2,7 +2,7 @@ spring:
   config:
     import: optional:file:${OSS_CONFIG_FILE:./config/oss.yaml}
   application:
-    name: DriveServer
+    name: ${APP_NAME:驾驶员疲劳与分心实时检测系统}
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/drive_server?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${DB_USERNAME:root}

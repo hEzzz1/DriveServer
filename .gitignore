@@ -26,6 +26,7 @@ replay_pid*
 # Maven / Gradle
 target/
 build/
+.m2/
 
 # IDE
 .idea/

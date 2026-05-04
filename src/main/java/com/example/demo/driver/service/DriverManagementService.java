@@ -104,8 +104,12 @@ public class DriverManagementService {
     public DriverDetailResponseData createDriver(AuthenticatedUser operator, CreateDriverRequest request) {
         Long enterpriseId = request.enterpriseId();
         validateEnterpriseExists(enterpriseId);
-        validateFleetBelongsToEnterprise(request.fleetId(), enterpriseId);
-        businessAccessService.assertCanAccessData(operator, enterpriseId, request.fleetId());
+        if (request.fleetId() != null) {
+            validateFleetBelongsToEnterprise(request.fleetId(), enterpriseId);
+            businessAccessService.assertCanAccessData(operator, enterpriseId, request.fleetId());
+        } else {
+            businessAccessService.assertCanAccessData(operator, enterpriseId, null);
+        }
 
         Driver driver = new Driver();
         driver.setEnterpriseId(enterpriseId);
@@ -175,14 +179,33 @@ public class DriverManagementService {
     }
 
     @Transactional
+    public DriverDetailResponseData unassignFleet(AuthenticatedUser operator, Long driverId) {
+        Driver driver = getDriverEntity(driverId);
+        businessAccessService.assertCanAccessData(operator, driver.getEnterpriseId(), driver.getFleetId());
+        if (driver.getFleetId() == null) {
+            return toDetail(driver, loadActiveSessions(List.of(driver)));
+        }
+        if (!loadActiveSessions(List.of(driver)).isEmpty()) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "驾驶员存在进行中的驾驶会话，不能移出车队");
+        }
+        Map<String, Object> before = snapshot(driver);
+        driver.setFleetId(null);
+        Driver saved = driverRepository.save(driver);
+
+        systemAuditService.record(operator, "DRIVER", "UNASSIGN_DRIVER_FLEET", "DRIVER", String.valueOf(saved.getId()),
+                "SUCCESS", "移出驾驶员所属车队", auditDetail(operator, saved.getId(), saved.getEnterpriseId(), before, snapshot(saved)));
+        return toDetail(saved, Map.of());
+    }
+
+    @Transactional
     public DriverDetailResponseData resetPin(AuthenticatedUser operator, Long driverId, String pin) {
         Driver driver = getDriverEntity(driverId);
         businessAccessService.assertCanAccessData(operator, driver.getEnterpriseId(), driver.getFleetId());
         Map<String, Object> before = snapshot(driver);
-        driver.setPinHash(passwordEncoder.encode(normalizeRequired(pin, "pin不能为空")));
+        driver.setPinHash(passwordEncoder.encode(normalizeRequired(pin, "签到码不能为空")));
         Driver saved = driverRepository.save(driver);
-        systemAuditService.record(operator, "DRIVER", "RESET_DRIVER_PIN", "DRIVER", String.valueOf(saved.getId()),
-                "SUCCESS", "重置驾驶员PIN", auditDetail(operator, saved.getId(), saved.getEnterpriseId(), before, snapshot(saved)));
+        systemAuditService.record(operator, "DRIVER", "RESET_DRIVER_SIGN_IN_CODE", "DRIVER", String.valueOf(saved.getId()),
+                "SUCCESS", "重置驾驶员签到码", auditDetail(operator, saved.getId(), saved.getEnterpriseId(), before, snapshot(saved)));
         return toDetail(saved, loadActiveSessions(List.of(saved)));
     }
 
@@ -217,6 +240,9 @@ public class DriverManagementService {
     }
 
     private void validateFleetBelongsToEnterprise(Long fleetId, Long enterpriseId) {
+        if (fleetId == null) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "fleetId不能为空");
+        }
         Fleet fleet = fleetRepository.findById(fleetId)
                 .orElseThrow(() -> new BusinessException(ApiCode.INVALID_PARAM, "fleetId不存在"));
         if (!fleet.getEnterpriseId().equals(enterpriseId)) {

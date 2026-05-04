@@ -103,7 +103,7 @@ public class DrivingSessionService {
         deviceService.ensureReadyForSignIn(device);
         List<AvailableDriverItemData> items = driverRepository.findAll().stream()
                 .filter(driver -> driver.getEnterpriseId().equals(device.getEnterpriseId()))
-                .filter(driver -> driver.getFleetId().equals(device.getFleetId()))
+                .filter(driver -> driver.getFleetId() != null && driver.getFleetId().equals(device.getFleetId()))
                 .filter(driver -> driver.getStatus() != null && driver.getStatus() == (byte) 1)
                 .filter(driver -> StringUtils.hasText(driver.getDriverCode()))
                 .map(driver -> new AvailableDriverItemData(driver.getId(), driver.getDriverCode(), driver.getName(), driver.getFleetId()))
@@ -123,11 +123,14 @@ public class DrivingSessionService {
         if (driver.getStatus() == null || driver.getStatus() == (byte) 0) {
             throw new BusinessException(ApiCode.FORBIDDEN, "驾驶员已禁用");
         }
+        if (driver.getFleetId() == null) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, "驾驶员未分配车队");
+        }
         if (!driver.getFleetId().equals(device.getFleetId())) {
             throw new BusinessException(ApiCode.INVALID_PARAM, "驾驶员不属于当前设备所在车队");
         }
         if (!StringUtils.hasText(driver.getPinHash()) || !passwordEncoder.matches(request.pin().trim(), driver.getPinHash())) {
-            throw new BusinessException(ApiCode.UNAUTHORIZED, "PIN错误");
+            throw new BusinessException(ApiCode.UNAUTHORIZED, "签到码错误");
         }
 
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
@@ -145,7 +148,7 @@ public class DrivingSessionService {
         session.setUpdatedAt(now);
         DrivingSession saved = drivingSessionRepository.save(session);
         systemAuditService.record(null, "SESSION", "SIGN_IN_DRIVER", "SESSION", String.valueOf(saved.getId()),
-                "SUCCESS", "司机签到", Map.of("sessionId", saved.getId(), "driverId", driver.getId(), "deviceId", device.getId()));
+                "SUCCESS", "驾驶员签到", Map.of("sessionId", saved.getId(), "driverId", driver.getId(), "deviceId", device.getId()));
         return toCurrentResponse(saved);
     }
 
@@ -161,7 +164,7 @@ public class DrivingSessionService {
         session.setUpdatedAt(now);
         DrivingSession saved = drivingSessionRepository.save(session);
         systemAuditService.record(null, "SESSION", "SIGN_OUT_DRIVER", "SESSION", String.valueOf(saved.getId()),
-                "SUCCESS", "司机签退", Map.of("sessionId", saved.getId(), "deviceId", saved.getDeviceId()));
+                "SUCCESS", "驾驶员签退", Map.of("sessionId", saved.getId(), "deviceId", saved.getDeviceId()));
         return toCurrentResponse(saved);
     }
 

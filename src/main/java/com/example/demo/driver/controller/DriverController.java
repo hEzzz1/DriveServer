@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -80,6 +81,13 @@ public class DriverController {
                                                                      @Valid @RequestBody ReassignDriverFleetRequest request,
                                                                      Authentication authentication) {
         return ApiResponse.success(driverManagementService.reassignFleet(currentUser(authentication), id, request));
+    }
+
+    @DeleteMapping("/{id}/fleet")
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'driver.manage')")
+    public ApiResponse<DriverDetailResponseData> unassignDriverFleet(@PathVariable Long id,
+                                                                     Authentication authentication) {
+        return ApiResponse.success(driverManagementService.unassignFleet(currentUser(authentication), id));
     }
 
     @PostMapping("/{id}/reset-pin")
