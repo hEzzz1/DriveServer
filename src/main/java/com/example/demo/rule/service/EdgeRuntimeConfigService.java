@@ -82,8 +82,8 @@ public class EdgeRuntimeConfigService {
 
         EdgeConfigResponseData.EvidencePolicyData evidencePolicy = new EdgeConfigResponseData.EvidencePolicyData(
                 true,
-                "VIDEO_CLIP",
-                "video/mp4",
+                "FRAME_SEQUENCE",
+                "application/zip",
                 68,
                 8 * 1024 * 1024,
                 30,
