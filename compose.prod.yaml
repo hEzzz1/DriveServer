@@ -79,6 +79,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRE_SECONDS: ${JWT_EXPIRE_SECONDS:-7200}
       JWT_ISSUER: ${JWT_ISSUER:-DriveServer}
+      OSS_CONFIG_FILE: ${OSS_CONFIG_FILE:-/app/config/oss.yaml}
+    volumes:
+      - ./config/oss.yaml:/app/config/oss.yaml:ro
     expose:
       - "8080"
     healthcheck:

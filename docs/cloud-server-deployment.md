@@ -448,12 +448,19 @@ docker build -t driveserver-app:latest .
 ```bash
 cd /opt/DriveServer
 cp .env.prod.example .env.prod
+cp config/oss.yaml.example config/oss.yaml
 ```
 
 然后编辑 `.env.prod`，至少修改：
 1. `MYSQL_ROOT_PASSWORD`
 2. `DB_PASSWORD`
 3. `JWT_SECRET`
+
+然后编辑 `config/oss.yaml`，至少修改：
+1. `alert.evidence.oss.endpoint`
+2. `alert.evidence.oss.bucket`
+3. `alert.evidence.oss.access-key-id`
+4. `alert.evidence.oss.access-key-secret`
 
 ### 6.4 启动整套服务
 ```bash
