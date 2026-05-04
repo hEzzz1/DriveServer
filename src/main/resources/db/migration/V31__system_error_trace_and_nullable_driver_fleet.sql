@@ -22,7 +22,14 @@ CREATE TABLE IF NOT EXISTS system_error_trace (
     ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+ALTER TABLE driver DROP FOREIGN KEY fk_driver_fleet_enterprise;
+
 ALTER TABLE driver MODIFY COLUMN fleet_id BIGINT NULL;
+
+ALTER TABLE driver
+  ADD CONSTRAINT fk_driver_fleet_enterprise
+  FOREIGN KEY (fleet_id, enterprise_id) REFERENCES fleet (id, enterprise_id)
+  ON UPDATE CASCADE ON DELETE RESTRICT;
 
 UPDATE permission
 SET name = '查看驾驶员', description = '驾驶员列表与详情'
