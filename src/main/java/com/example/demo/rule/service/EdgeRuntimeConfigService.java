@@ -82,11 +82,15 @@ public class EdgeRuntimeConfigService {
 
         EdgeConfigResponseData.EvidencePolicyData evidencePolicy = new EdgeConfigResponseData.EvidencePolicyData(
                 true,
-                "KEY_FRAME",
-                "image/jpeg",
+                "VIDEO_CLIP",
+                "video/mp4",
                 68,
-                96 * 1024,
-                30);
+                8 * 1024 * 1024,
+                30,
+                8_000L,
+                3_000L,
+                500L,
+                24);
 
         return new EdgeConfigResponseData(
                 edgeConfigVersionResolver.resolveCurrentVersion(),

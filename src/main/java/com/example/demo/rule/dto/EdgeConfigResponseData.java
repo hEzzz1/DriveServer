@@ -65,7 +65,11 @@ public record EdgeConfigResponseData(
             String mimeType,
             Integer jpegQuality,
             Integer maxBytes,
-            Integer retentionDays
+            Integer retentionDays,
+            Long sequenceWindowMs,
+            Long postWindowMs,
+            Long sequenceSampleIntervalMs,
+            Integer sequenceMaxFrames
     ) {
     }
 }

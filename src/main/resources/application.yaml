@@ -1,10 +1,16 @@
 spring:
+  config:
+    import: optional:file:${OSS_CONFIG_FILE:./config/oss.yaml}
   application:
     name: DriveServer
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/drive_server?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:123456}
+  servlet:
+    multipart:
+      max-file-size: ${ALERT_EVIDENCE_MAX_FILE_SIZE:20MB}
+      max-request-size: ${ALERT_EVIDENCE_MAX_REQUEST_SIZE:25MB}
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -65,3 +71,17 @@ ingest:
   stream:
     producer: ${INGEST_STREAM_PRODUCER:redis}
     key: ${INGEST_STREAM_KEY:stream:events}
+
+alert:
+  evidence:
+    storage-type: ${ALERT_EVIDENCE_STORAGE_TYPE:oss}
+    client-url-mode: ${ALERT_EVIDENCE_CLIENT_URL_MODE:proxy}
+    storage-dir: ${ALERT_EVIDENCE_STORAGE_DIR:data/alert-evidence}
+    max-bytes: ${ALERT_EVIDENCE_MAX_BYTES:20971520}
+    oss:
+      endpoint: ${OSS_ENDPOINT:}
+      bucket: ${OSS_BUCKET:}
+      access-key-id: ${OSS_ACCESS_KEY_ID:}
+      access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+      object-prefix: ${OSS_OBJECT_PREFIX:alert-evidence}
+      signed-url-expire-seconds: ${OSS_SIGNED_URL_EXPIRE_SECONDS:300}

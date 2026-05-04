@@ -28,15 +28,19 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -186,6 +190,58 @@ class IngestModuleIntegrationTest {
         assertEquals(Long.valueOf(1744010475000L), alert.getEdgeWindowEndMs());
         assertEquals(Long.valueOf(1744010475200L), alert.getEdgeCreatedAtMs());
         assertNotNull(alert.getCreatedAt());
+    }
+
+    @Test
+    void uploadEvidenceShouldStoreMediaAndReturnEvidenceUrl() throws Exception {
+        String eventId = "evt_media_" + UUID.randomUUID();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "clip.mp4",
+                "video/mp4",
+                "video-bytes".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/api/v1/events/evidence")
+                        .file(file)
+                        .header("X-Device-Code", DEVICE_CODE)
+                        .header("X-Device-Token", DEVICE_TOKEN)
+                        .param("eventId", eventId)
+                        .param("evidenceType", "VIDEO_CLIP")
+                        .param("evidenceMimeType", "video/mp4")
+                        .param("evidenceCapturedAtMs", "1744010476000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.eventId").value(eventId))
+                .andExpect(jsonPath("$.data.evidenceType").value("VIDEO_CLIP"))
+                .andExpect(jsonPath("$.data.evidenceMimeType").value("video/mp4"))
+                .andExpect(jsonPath("$.data.evidenceCapturedAtMs").value(1744010476000L))
+                .andExpect(jsonPath("$.data.evidenceUrl").value(startsWith("alert-evidence:events/evt_media_")));
+    }
+
+    @Test
+    void uploadFrameSequenceEvidenceShouldAcceptZipArchive() throws Exception {
+        String eventId = "evt_sequence_" + UUID.randomUUID();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "sequence.zip",
+                "application/zip",
+                "zip-bytes".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/api/v1/events/evidence")
+                        .file(file)
+                        .header("X-Device-Code", DEVICE_CODE)
+                        .header("X-Device-Token", DEVICE_TOKEN)
+                        .param("eventId", eventId)
+                        .param("evidenceType", "FRAME_SEQUENCE")
+                        .param("evidenceMimeType", "application/zip")
+                        .param("evidenceCapturedAtMs", "1744010477000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.eventId").value(eventId))
+                .andExpect(jsonPath("$.data.evidenceType").value("FRAME_SEQUENCE"))
+                .andExpect(jsonPath("$.data.evidenceMimeType").value("application/zip"))
+                .andExpect(jsonPath("$.data.evidenceCapturedAtMs").value(1744010477000L))
+                .andExpect(jsonPath("$.data.evidenceUrl").value(startsWith("alert-evidence:events/evt_sequence_")));
     }
 
     @Test

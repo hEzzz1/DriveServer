@@ -24,12 +24,14 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -281,6 +283,27 @@ class AlertModuleIntegrationTest {
     }
 
     @Test
+    void alertEvidenceDataUriShouldBeStoredAndStreamed() throws Exception {
+        String operatorToken = loginAndGetToken("operator", "123456");
+        String viewerToken = loginAndGetToken("viewer", "123456");
+        Long alertId = createAlert(operatorToken, createAlertPayloadWithEvidence());
+
+        mockMvc.perform(get("/api/v1/alerts/{id}", alertId)
+                        .header("Authorization", "Bearer " + viewerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.evidenceType").value("KEY_FRAME"))
+                .andExpect(jsonPath("$.data.evidenceMimeType").value("image/jpeg"))
+                .andExpect(jsonPath("$.data.evidenceUrl").value("/api/v1/org/alerts/" + alertId + "/evidence"));
+
+        mockMvc.perform(get("/api/v1/alerts/{id}/evidence", alertId)
+                        .header("Authorization", "Bearer " + viewerToken))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.IMAGE_JPEG))
+                .andExpect(content().bytes("drive-evidence".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
     void methodNotAllowedShouldReturn405InsteadOf500() throws Exception {
         String operatorToken = loginAndGetToken("operator", "123456");
         Long alertId = createAlert(operatorToken);
@@ -292,10 +315,14 @@ class AlertModuleIntegrationTest {
     }
 
     private Long createAlert(String token) throws Exception {
+        return createAlert(token, createAlertPayload());
+    }
+
+    private Long createAlert(String token, String payload) throws Exception {
         String json = mockMvc.perform(post("/api/v1/alerts")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(createAlertPayload()))
+                        .content(payload))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.status").value(0))
@@ -323,6 +350,28 @@ class AlertModuleIntegrationTest {
                   "fatigueScore": 0.91,
                   "distractionScore": 0.86,
                   "triggerTime": "2026-04-07T10:01:16Z",
+                  "remark": "系统自动创建"
+                }
+                """.formatted(ENTERPRISE_ID, DRIVER_ID);
+    }
+
+    private String createAlertPayloadWithEvidence() {
+        return """
+                {
+                  "enterpriseId": %d,
+                  "fleetId": 1001,
+                  "vehicleId": 2001,
+                  "driverId": %d,
+                  "ruleId": 1,
+                  "riskLevel": 3,
+                  "riskScore": 0.89,
+                  "fatigueScore": 0.91,
+                  "distractionScore": 0.86,
+                  "triggerTime": "2026-04-07T10:01:16Z",
+                  "evidenceType": "KEY_FRAME",
+                  "evidenceUrl": "data:image/jpeg;base64,ZHJpdmUtZXZpZGVuY2U=",
+                  "evidenceMimeType": "image/jpeg",
+                  "evidenceCapturedAtMs": 1744010476000,
                   "remark": "系统自动创建"
                 }
                 """.formatted(ENTERPRISE_ID, DRIVER_ID);

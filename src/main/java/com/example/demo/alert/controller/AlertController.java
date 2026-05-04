@@ -7,10 +7,16 @@ import com.example.demo.alert.dto.AlertOperationResponseData;
 import com.example.demo.alert.dto.AlertPageResponseData;
 import com.example.demo.alert.dto.CreateAlertRequest;
 import com.example.demo.alert.service.AlertService;
+import com.example.demo.alert.service.AlertEvidenceService;
 import com.example.demo.auth.security.AuthenticatedUser;
 import com.example.demo.common.api.ApiResponse;
 import jakarta.validation.Valid;
+import org.springframework.core.io.Resource;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 
 @RestController
@@ -60,6 +67,21 @@ public class AlertController {
     @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'alert.read')")
     public ApiResponse<AlertDetailResponseData> detail(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.success(alertService.getAlertDetail(id, currentUser(authentication)));
+    }
+
+    @GetMapping("/{id}/evidence")
+    @PreAuthorize("@permissionAuthorizationService.hasPermission(authentication, 'alert.read')")
+    public ResponseEntity<Resource> evidence(@PathVariable Long id, Authentication authentication) {
+        AlertEvidenceService.EvidenceResource evidence = alertService.getAlertEvidence(id, currentUser(authentication));
+        return ResponseEntity.ok()
+                .contentType(evidence.mediaType())
+                .contentLength(evidence.contentLength())
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
+                        .filename(evidence.filename(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .body(evidence.resource());
     }
 
     @PostMapping("/{id}/confirm")

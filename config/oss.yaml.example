@@ -1,0 +1,12 @@
+alert:
+  evidence:
+    storage-type: oss
+    client-url-mode: proxy
+    max-bytes: 20971520
+    oss:
+      endpoint: https://oss-cn-hangzhou.aliyuncs.com
+      bucket: your-bucket-name
+      access-key-id: your-access-key-id
+      access-key-secret: your-access-key-secret
+      object-prefix: alert-evidence
+      signed-url-expire-seconds: 300

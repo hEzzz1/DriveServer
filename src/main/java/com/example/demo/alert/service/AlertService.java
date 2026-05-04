@@ -71,6 +71,7 @@ public class AlertService {
     private final DriverRepository driverRepository;
     private final DeviceRepository deviceRepository;
     private final RuleConfigRepository ruleConfigRepository;
+    private final AlertEvidenceService alertEvidenceService;
     private final ApplicationEventPublisher applicationEventPublisher;
 
     public AlertService(AlertEventRepository alertEventRepository,
@@ -82,6 +83,7 @@ public class AlertService {
                         DriverRepository driverRepository,
                         DeviceRepository deviceRepository,
                         RuleConfigRepository ruleConfigRepository,
+                        AlertEvidenceService alertEvidenceService,
                         ApplicationEventPublisher applicationEventPublisher) {
         this.alertEventRepository = alertEventRepository;
         this.alertActionLogRepository = alertActionLogRepository;
@@ -92,6 +94,7 @@ public class AlertService {
         this.driverRepository = driverRepository;
         this.deviceRepository = deviceRepository;
         this.ruleConfigRepository = ruleConfigRepository;
+        this.alertEvidenceService = alertEvidenceService;
         this.applicationEventPublisher = applicationEventPublisher;
     }
 
@@ -102,9 +105,17 @@ public class AlertService {
         }
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String normalizedRemark = normalizeRemark(request.getRemark());
+        String alertNo = generateAlertNo(now, request.getDriverId());
+        AlertEvidenceService.StoredEvidence storedEvidence = alertEvidenceService.storeAlertEvidence(
+                alertNo,
+                request.getEvidenceType(),
+                request.getEvidenceUrl(),
+                request.getEvidenceMimeType(),
+                request.getEvidenceCapturedAtMs(),
+                now);
 
         AlertEvent alert = new AlertEvent();
-        alert.setAlertNo(generateAlertNo(now, request.getDriverId()));
+        alert.setAlertNo(alertNo);
         alert.setEnterpriseId(request.getEnterpriseId());
         alert.setFleetId(request.getFleetId());
         alert.setVehicleId(request.getVehicleId());
@@ -132,11 +143,11 @@ public class AlertService {
         alert.setEdgeWindowStartMs(request.getEdgeWindowStartMs());
         alert.setEdgeWindowEndMs(request.getEdgeWindowEndMs());
         alert.setEdgeCreatedAtMs(request.getEdgeCreatedAtMs());
-        alert.setEvidenceType(normalizeOptionalText(request.getEvidenceType()));
-        alert.setEvidenceUrl(normalizeOptionalText(request.getEvidenceUrl()));
-        alert.setEvidenceMimeType(normalizeOptionalText(request.getEvidenceMimeType()));
-        alert.setEvidenceCapturedAtMs(request.getEvidenceCapturedAtMs());
-        alert.setEvidenceRetentionUntil(resolveEvidenceRetentionUntil(request.getEvidenceUrl(), request.getEvidenceRetentionUntil(), now));
+        alert.setEvidenceType(storedEvidence.evidenceType());
+        alert.setEvidenceUrl(storedEvidence.evidenceUrl());
+        alert.setEvidenceMimeType(storedEvidence.evidenceMimeType());
+        alert.setEvidenceCapturedAtMs(storedEvidence.evidenceCapturedAtMs());
+        alert.setEvidenceRetentionUntil(resolveEvidenceRetentionUntil(storedEvidence.evidenceUrl(), request.getEvidenceRetentionUntil(), now));
         alert.setTriggerTime(LocalDateTime.ofInstant(request.getTriggerTime().toInstant(), ZoneOffset.UTC));
         alert.setStatus(AlertStatus.NEW.getCode());
         alert.setLatestActionBy(operator.getUserId());
@@ -256,10 +267,17 @@ public class AlertService {
                 alert.getEdgeWindowEndMs(),
                 alert.getEdgeCreatedAtMs(),
                 alert.getEvidenceType(),
-                alert.getEvidenceUrl(),
+                alertEvidenceService.toClientEvidenceUrl(alert),
                 alert.getEvidenceMimeType(),
                 alert.getEvidenceCapturedAtMs(),
                 toOffsetDateTime(alert.getEvidenceRetentionUntil()));
+    }
+
+    @Transactional(readOnly = true)
+    public AlertEvidenceService.EvidenceResource getAlertEvidence(Long alertId, AuthenticatedUser operator) {
+        AlertEvent alert = getAlertOrThrow(alertId);
+        businessAccessService.assertCanAccessData(operator, alert.getEnterpriseId(), alert.getFleetId());
+        return alertEvidenceService.loadEvidence(alert);
     }
 
     private AlertOperationResponseData transition(Long alertId,
@@ -381,7 +399,7 @@ public class AlertService {
                 alert.getStatus() == null ? null : (int) alert.getStatus(),
                 toOffsetDateTime(alert.getTriggerTime()),
                 alert.getEvidenceType(),
-                alert.getEvidenceUrl(),
+                alertEvidenceService.toClientEvidenceUrl(alert),
                 alert.getEvidenceMimeType(),
                 alert.getEvidenceCapturedAtMs(),
                 toOffsetDateTime(alert.getEvidenceRetentionUntil()));

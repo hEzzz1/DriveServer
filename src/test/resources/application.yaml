@@ -39,3 +39,9 @@ ingest:
   stream:
     producer: noop
     key: stream:events
+
+alert:
+  evidence:
+    storage-type: local
+    storage-dir: target/test-alert-evidence
+    max-bytes: 1048576

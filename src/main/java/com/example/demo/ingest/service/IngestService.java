@@ -4,6 +4,8 @@ import com.example.demo.common.api.ApiCode;
 import com.example.demo.common.exception.BusinessException;
 import com.example.demo.device.entity.Device;
 import com.example.demo.device.service.DeviceService;
+import com.example.demo.alert.service.AlertEvidenceService;
+import com.example.demo.ingest.dto.IngestEvidenceResponseData;
 import com.example.demo.ingest.dto.IngestEventRequest;
 import com.example.demo.ingest.dto.IngestEventResponseData;
 import com.example.demo.ingest.idempotency.EventIdempotencyStore;
@@ -15,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
 
@@ -28,6 +31,7 @@ public class IngestService {
     private final EventAlertOrchestrator eventAlertOrchestrator;
     private final DeviceService deviceService;
     private final DrivingSessionService drivingSessionService;
+    private final AlertEvidenceService alertEvidenceService;
     private final Duration eventIdTtl;
 
     public IngestService(EventIdempotencyStore eventIdempotencyStore,
@@ -35,12 +39,14 @@ public class IngestService {
                          EventAlertOrchestrator eventAlertOrchestrator,
                          DeviceService deviceService,
                          DrivingSessionService drivingSessionService,
+                         AlertEvidenceService alertEvidenceService,
                          @Value("${ingest.idempotency.ttl:24h}") Duration eventIdTtl) {
         this.eventIdempotencyStore = eventIdempotencyStore;
         this.eventStreamPublisher = eventStreamPublisher;
         this.eventAlertOrchestrator = eventAlertOrchestrator;
         this.deviceService = deviceService;
         this.drivingSessionService = drivingSessionService;
+        this.alertEvidenceService = alertEvidenceService;
         this.eventIdTtl = eventIdTtl;
     }
 
@@ -88,6 +94,29 @@ public class IngestService {
         return new IngestEventResponseData(true);
     }
 
+    public IngestEvidenceResponseData uploadEvidence(String deviceCode,
+                                                     String deviceToken,
+                                                     String eventId,
+                                                     String evidenceType,
+                                                     String evidenceMimeType,
+                                                     Long evidenceCapturedAtMs,
+                                                     MultipartFile file) {
+        deviceService.authenticateAndTouch(deviceCode, deviceToken);
+        String normalizedEventId = normalizeEventId(eventId);
+        AlertEvidenceService.StoredEvidence stored = alertEvidenceService.storeUploadedEvidence(
+                normalizedEventId,
+                evidenceType,
+                evidenceMimeType,
+                evidenceCapturedAtMs,
+                file);
+        return new IngestEvidenceResponseData(
+                normalizedEventId,
+                stored.evidenceType(),
+                stored.evidenceUrl(),
+                stored.evidenceMimeType(),
+                stored.evidenceCapturedAtMs());
+    }
+
     private Long parseOptionalBusinessId(String rawValue) {
         if (!StringUtils.hasText(rawValue)) {
             return null;
@@ -97,5 +126,12 @@ public class IngestService {
             return Long.parseLong(trimmed);
         }
         throw new BusinessException(ApiCode.INVALID_PARAM, "业务ID格式非法");
+    }
+
+    private String normalizeEventId(String eventId) {
+        if (!StringUtils.hasText(eventId)) {
+            throw new BusinessException(ApiCode.INVALID_PARAM, ApiCode.INVALID_PARAM.getMessage());
+        }
+        return eventId.trim();
     }
 }
